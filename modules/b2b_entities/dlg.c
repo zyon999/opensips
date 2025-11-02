@@ -1154,7 +1154,14 @@ logic_notify:
 				b2b_run_tracer(dlg, msg, tm_tran);
 
 
-			if (method_value == METHOD_PRACK)
+                        if (method_value == METHOD_NOTIFY)
+                        {
+                                str ok = str_init("OK");
+                                tmb.t_reply_with_body(tm_tran, 200, &ok, 0, 0, &to_tag);
+                                tmb.unref_cell(tm_tran);
+                                goto run_cb;
+                        }
+			else if (method_value == METHOD_PRACK)
 			{
 				/* Because PRACK transactions are separate from whatever UAS is dealing with now (PRACKs can come before
 				   INVITE is answered and will have new CSeq), we need to make sure we store it for when we get response for it. */
