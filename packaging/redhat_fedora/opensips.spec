@@ -37,7 +37,11 @@
 %global _with_wolfssl 1
 %endif
 
-%global EXCLUDE_MODULES %{!?_with_auth_jwt:auth_jwt} %{!?_with_cachedb_cassandra:cachedb_cassandra} %{!?_with_cachedb_couchbase:cachedb_couchbase} %{!?_with_cachedb_dynamodb:cachedb_dynamodb} %{!?_with_event_sqs:event_sqs} %{!?_with_cachedb_mongodb:cachedb_mongodb} %{!?_with_cachedb_redis:cachedb_redis} %{!?_with_db_oracle:db_oracle} %{!?_with_osp:osp} %{!?_with_sngtc:sngtc} %{!?_with_aaa_diameter:aaa_diameter aka_av_diameter} %{?_without_db_perlvdb:db_perlvdb} %{?_without_snmpstats:snmpstats} %{!?_with_wolfssl:tls_wolfssl} launch_darkly http2d rtp.io
+%if 0%{?rhel} > 10 || 0%{?fedora} > 43
+%global _with_opentelemetry 1
+%endif
+
+%global EXCLUDE_MODULES %{!?_with_auth_jwt:auth_jwt} %{!?_with_cachedb_cassandra:cachedb_cassandra} %{!?_with_cachedb_couchbase:cachedb_couchbase} %{!?_with_cachedb_dynamodb:cachedb_dynamodb} %{!?_with_event_sqs:event_sqs} %{!?_with_cachedb_mongodb:cachedb_mongodb} %{!?_with_cachedb_redis:cachedb_redis} %{!?_with_db_oracle:db_oracle} %{!?_with_osp:osp} %{!?_with_sngtc:sngtc} %{!?_with_aaa_diameter:aaa_diameter aka_av_diameter} %{?_without_db_perlvdb:db_perlvdb} %{?_without_snmpstats:snmpstats} %{!?_with_wolfssl:tls_wolfssl} %{!?_with_opentelemetry:opentelemetry} launch_darkly http2d rtp.io
 
 Summary:  Very fast and configurable SIP server
 Name:     opensips
@@ -79,7 +83,7 @@ BuildRequires:  openldap-devel
 BuildRequires:  curl-devel
 # BuildRequires:  GeoIP-devel
 BuildRequires:  libmaxminddb-devel
-BuildRequires:  pcre-devel
+BuildRequires:  pcre2-devel
 %if 0%{?_with_python3:1}
 BuildRequires:  python3-devel
 %else
@@ -152,6 +156,20 @@ has a corresponding profile, the KEY used for signing the JWT
 and two timestamps describing a validation interval. Multiple
 JWT secrets can point to the same JWT profile.
 %endif
+
+%package  auth-web3-module
+Summary:  Web3-based authentication for OpenSIPS
+Group:    System Environment/Daemons
+Requires: %{name} = %{version}-%{release}
+
+%description  auth-web3-module
+OpenSIPS is a very fast and flexible SIP (RFC3261)
+server. Written entirely in C, OpenSIPS can handle thousands calls
+per second even on low-budget hardware.
+.
+This package provides Web3-based authentication for OpenSIPS, enabling SIP
+authentication through blockchain technology and ENS (Ethereum Name Service)
+resolution.
 
 %package  auth-modules
 Summary:  Authentication interfaces for OpenSIPS
@@ -563,6 +581,22 @@ per second even on low-budget hardware.
 The %{name}-db_oracle package contains the Oracle plugin for %{name}, which allows
 a Oracle-Database to be used for persistent storage.
 %endif
+
+%if 0%{?_with_opentelemetry:1}
+%package  opentelemetry-module
+Summary:  OpenSIPS observability using OpenTelemetry
+Group:    System Environment/Daemons
+Requires: %{name} = %{version}-%{release}
+Requires: opentelemetry-cpp-devel
+
+%description  opentelemetry-module
+OpenSIPS is a very fast and flexible SIP (RFC3261)
+server. Written entirely in C, OpenSIPS can handle thousands calls
+per second even on low-budget hardware.
+.
+This package provides OpenSISP observability using OpenTelemetry.
+%endif
+
 
 %if 0%{?_with_osp:1}
 %package  osp-module
@@ -1316,6 +1350,10 @@ fi
 %doc docdir/README.auth_jwt
 %endif
 
+%files auth-web3-module
+%{_libdir}/opensips/modules/auth_web3.so
+%doc docdir/README.auth_web3
+
 %files auth-modules
 %{_libdir}/opensips/modules/auth.so
 %{_libdir}/opensips/modules/auth_aka.so
@@ -1464,6 +1502,12 @@ fi
 %dir %{_datadir}/opensips/oracle
 %{_datadir}/opensips/oracle/*
 %doc docdir/README.db_oracle
+%endif
+
+%if 0%{?_with_opentelemetry:1}
+%files  opentelemetry-module
+%{_libdir}/opensips/modules/opentelemetry.so
+%doc docdir/README.opentelemetry
 %endif
 
 %if 0%{?_with_osp:1}
@@ -1668,6 +1712,9 @@ fi
 
 
 %changelog
+* Fri Dec 05 2025 Razvan Crainea <razvan@opensips.org> - 4.0.0-1
+- New module: auth_web3
+
 * Wed May 14 2025 Razvan Crainea <razvan@opensips.org> - 3.6.0-1
 - New module: config
 
