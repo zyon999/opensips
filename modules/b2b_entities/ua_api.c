@@ -570,7 +570,7 @@ static b2b_dlg_t *ua_get_dlg_by_key(unsigned int hash_index,
 }
 
 int ua_send_reply(int et, str *b2b_key, int method, int code, str *reason,
-	str *body, str *content_type, str *extra_headers)
+	str *body, str *content_type, str *extra_headers, int *cseq)
 {
 	b2b_rpl_data_t rpl_data;
 	str hdrs = {0,0};
@@ -603,6 +603,14 @@ int ua_send_reply(int et, str *b2b_key, int method, int code, str *reason,
 	rpl_data.code = code;
 	rpl_data.text = reason;
 	rpl_data.body = body;
+	if (cseq) {
+		if (*cseq < 0) {
+			LM_ERR("Invalid negative CSeq [%d]\n", *cseq);
+			goto error;
+		}
+		rpl_data.cseq = (unsigned int)*cseq;
+		rpl_data.cseq_set = 1;
+	}
 
 	if (ua_build_hdrs(&hdrs, body?1:0, content_type, extra_headers) < 0) {
 		LM_ERR("Failed to build headers\n");
@@ -773,14 +781,14 @@ int b2b_ua_update(struct sip_msg *msg, str *key, str *method, str *body,
 }
 
 int b2b_ua_reply(struct sip_msg *msg, str *key, str *method, int *code,
-	str *reason, str *body, str *extra_headers, str *content_type)
+	str *reason, str *body, str *extra_headers, str *content_type, int *cseq)
 {
 	unsigned int method_value;
 
 	parse_method(method->s, method->s+method->len, &method_value);
 
 	if (ua_send_reply(B2B_NONE, key, method_value, *code, reason,
-		body, content_type, extra_headers) < 0) {
+		body, content_type, extra_headers, cseq) < 0) {
 		LM_ERR("Failed to send reply\n");
 		return -1;
 	}
@@ -1054,7 +1062,7 @@ mi_response_t *b2b_ua_mi_reply(const mi_params_t *params,
 	struct mi_handler *_)
 {
 	str key, method, body, content_type, extra_headers;
-	int code;
+	int code, cseq, cseq_set = 0;
 	str reason;
 	unsigned int method_value;
 
@@ -1096,12 +1104,21 @@ mi_response_t *b2b_ua_mi_reply(const mi_params_t *params,
 	default:
 		return init_mi_param_error();
 	}
+	switch (try_get_mi_int_param(params, "cseq", &cseq)) {
+	case 0:
+		cseq_set = 1;
+		break;
+	case -1:
+		break;
+	default:
+		return init_mi_param_error();
+	}
 
 	parse_method(method.s, method.s+method.len, &method_value);
 
 	if (ua_send_reply(B2B_NONE, &key, method_value, code, &reason,
 		body.s?&body:NULL, content_type.s?&content_type:NULL,
-		extra_headers.s?&extra_headers:NULL) < 0) {
+		extra_headers.s?&extra_headers:NULL, cseq_set?&cseq:NULL) < 0) {
 		LM_ERR("Failed to send reply\n");
 		return init_mi_error(500, MI_SSTR("Failed to send reply"));
 	}
