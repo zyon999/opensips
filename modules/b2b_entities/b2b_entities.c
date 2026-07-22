@@ -120,6 +120,7 @@ static const cmd_export_t cmds[] = {
 		{CMD_PARAM_STR|CMD_PARAM_OPT, 0, 0},
 		{CMD_PARAM_STR|CMD_PARAM_OPT, 0, 0},
 		{CMD_PARAM_STR|CMD_PARAM_OPT, 0, 0},
+		{CMD_PARAM_INT|CMD_PARAM_OPT, 0, 0},
 		{0,0,0}},
 		REQUEST_ROUTE|EVENT_ROUTE},
 	{"ua_session_terminate", (cmd_function)b2b_ua_terminate, {
@@ -251,12 +252,19 @@ static const mi_export_t mi_cmds[] = {
 	},
 	{ "ua_session_reply", 0, 0, 0, {
 		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, 0}},
+		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, "cseq", 0}},
 		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, "body", 0}},
+		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, "body", "cseq", 0}},
 		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, "extra_headers", 0}},
+		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, "extra_headers", "cseq", 0}},
 		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, "body", "content_type", 0}},
+		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, "body", "content_type", "cseq", 0}},
 		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, "body", "extra_headers", 0}},
+		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, "body", "extra_headers", "cseq", 0}},
 		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, "body", "content_type",
 			"extra_headers", 0}},
+		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, "body", "content_type",
+			"extra_headers", "cseq", 0}},
 		{EMPTY_MI_RECIPE}}, {0}
 	},
 	{ "ua_session_terminate", 0, 0, 0, {
