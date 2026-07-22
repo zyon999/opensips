@@ -724,7 +724,7 @@ int b2b_prescript_f(struct sip_msg *msg, void *uparam)
 	str logic_key= {NULL,0};
 	b2b_table table = NULL;
 	int method_value;
-	int uac_method_value = 0;
+	unsigned int uac_method_value = 0;
 	int allow_early_refer_notify = 0;
 	str from_tag;
 	str to_tag;
