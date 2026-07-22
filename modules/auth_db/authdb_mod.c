@@ -80,7 +80,7 @@ struct sig_binds sigb;
 #define USER_COL "username"
 #define DOMAIN_COL "domain"
 #define PASS_COL "ha1"
-#define DEFAULT_CRED_LIST "rpid"
+#define DEFAULT_CRED_LIST ""
 #define HASH_COL_SHA256     "ha1_sha256"
 #define HASH_COL_SHA512t256 "ha1_sha512t256"
 
@@ -99,7 +99,7 @@ str uri_domain_column       = str_init("domain");
 str uri_uriuser_column      = str_init("uri_user");
 
 int calc_ha1                = 0;
-int use_domain              = 0; /* Use also domain when looking up in table */
+int use_domain              = 1; /* Include domain when looking up in table */
 
 db_con_t* auth_db_handle    = 0; /* database connection handle */
 db_func_t auth_dbf;

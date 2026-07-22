@@ -65,7 +65,7 @@ MAIN_NAME=opensips
 
 #version number
 VERSION_MAJOR = 4
-VERSION_MINOR = 0
+VERSION_MINOR = 1
 VERSION_SUBMINOR = 0
 VERSION_BUILD = dev
 
@@ -230,7 +230,7 @@ arm_macros= __arm__ __thumb__
 arm6_macros= __ARM_ARCH_6__
 arm7_macros= __ARM_ARCH_7__ __ARM_ARCH_7A__
 
-arm64_macros= __AARCH64EL__
+arm64_macros= __aarch64__ __AARCH64EL__ __AARCH64EB__
 
 ppc_macros= __powerpc __powerpc__ __POWERPC__ __ppc__ _ARCH_PPC
 ppc64_macros= __ppc64__ _ARCH_PPC64
@@ -544,7 +544,7 @@ endif
 
 ifneq ($(DBXML2HTML),)
 ifeq ($(DBHTMLCSS),)
-DBHTMLCSS = ../../../doc/module-docbook.css
+DBHTMLCSS = ../../../docs/module-docbook.css
 endif
 #DBHTMLXSL = /usr/share/xml/docbook/stylesheet/nwalsh/html/docbook.xsl
 # On CentOS, this is the right path:
@@ -749,6 +749,10 @@ ifeq ($(ARCH), arm6)
 endif
 
 ifeq ($(ARCH), arm7)
+	use_fast_lock=yes
+endif
+
+ifeq ($(ARCH), aarch64)
 	use_fast_lock=yes
 endif
 
@@ -1667,25 +1671,8 @@ $(warning	No locking method found so far, trying SYS V sems)
 		found_lock_method=yes
 endif
 
-# override pthread functions for libssl >= 1.1
 TWEAK_DEFS=
 TWEAK_LIBS=
-ifeq ($(CROSS_COMPILE),)
-SSL_BUILDER=$(shell \
-	if pkg-config --exists libssl; then \
-		echo 'pkg-config libssl'; \
-	fi)
-endif
-
-ifneq ($(SSL_BUILDER),)
-	VER := $(shell $(SSL_BUILDER) --modversion | \
-	      awk -F. '{print $$1 * 100 + $$2}')
-# test if we have a version higher or equal than 1.1
-ifeq ($(shell test $(VER) -ge 101; echo $$?),0)
-	TWEAK_DEFS = -pthread
-	TWEAK_LIBS = -pthread -rdynamic -ldl -Wl,-Bsymbolic-functions
-endif
-endif
 
 
 ## Unit Testing - required extensions

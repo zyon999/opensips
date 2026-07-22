@@ -26,8 +26,8 @@ imc Module
 
         1.5. Exported MI Functions
 
-              1.5.1. imc_list_rooms
-              1.5.2. imc_list_members
+              1.5.1. imc:list_rooms
+              1.5.2. imc:list_members
 
         1.6. Exported Statistics
 
@@ -192,28 +192,32 @@ if(is_method("MESSAGE)
 
 1.5. Exported MI Functions
 
-1.5.1.  imc_list_rooms
+1.5.1.  imc:list_rooms
+
+   Replaces obsolete MI command: imc_list_rooms.
 
    Lists of the IM Conferencing rooms.
 
-   Name: imc_list_rooms
+   Name: imc:list_rooms
 
    Parameters: none
 
    MI FIFO Command Format:
-                opensips-cli -x mi imc_list_rooms
+                opensips-cli -x mi imc:list_rooms
 
-1.5.2.  imc_list_members
+1.5.2.  imc:list_members
+
+   Replaces obsolete MI command: imc_list_members.
 
    Listing of the members in IM Conferencing rooms.
 
-   Name: imc_list_members
+   Name: imc:list_members
 
    Parameters:
      * room : the room for which you want to list the members
 
    MI FIFO Command Format:
-                opensips-cli -x mi imc_list_members sip:chat-000@opensip
+                opensips-cli -x mi imc:list_members sip:chat-000@opensip
 s.org
 
 1.6. Exported Statistics
@@ -318,10 +322,10 @@ Chapter 2. Contributors
    Table 2.1. Top contributors by DevScore^(1), authored
    commits^(2) and lines added/removed^(3)
      Name DevScore Commits Lines ++ Lines --
-   1. Daniel-Constantin Mierla (@miconda) 43 12 1604 1007
-   2. Bogdan-Andrei Iancu (@bogdan-iancu) 42 29 308 548
+   1. Bogdan-Andrei Iancu (@bogdan-iancu) 43 30 313 553
+   2. Daniel-Constantin Mierla (@miconda) 43 12 1604 1007
    3. Anca Vamanu 32 5 3014 16
-   4. Razvan Crainea (@razvancrainea) 18 16 34 40
+   4. Razvan Crainea (@razvancrainea) 29 25 189 115
    5. Liviu Chircu (@liviuchircu) 15 12 39 66
    6. Henning Westerholt (@henningw) 10 7 76 105
    7. Vlad Patrascu (@rvlad-patrascu) 9 6 75 80
@@ -341,7 +345,7 @@ Chapter 2. Contributors
    merge commits. Regarding imported patches/code, we do our best
    to count the work on behalf of the proper owner, as per the
    "fix_authors" and "mod_renames" arrays in
-   opensips/doc/build-contrib.sh. If you identify any
+   opensips/docs/build-contrib.sh. If you identify any
    patches/commits which do not get properly attributed to you,
    please submit a pull request which extends "fix_authors" and/or
    "mod_renames".
@@ -353,11 +357,11 @@ Chapter 2. Contributors
 
    Table 2.2. Most recently active contributors^(1) to this module
                       Name                   Commit Activity
-   1.  Razvan Crainea (@razvancrainea)     Sep 2011 - Sep 2024
-   2.  Alexandra Titoc                     Sep 2024 - Sep 2024
-   3.  Maksym Sobolyev (@sobomax)          Feb 2023 - Feb 2023
-   4.  Liviu Chircu (@liviuchircu)         Mar 2014 - Apr 2021
-   5.  Bogdan-Andrei Iancu (@bogdan-iancu) Oct 2006 - Apr 2020
+   1.  Razvan Crainea (@razvancrainea)     Sep 2011 - Jun 2026
+   2.  Bogdan-Andrei Iancu (@bogdan-iancu) Oct 2006 - Apr 2026
+   3.  Alexandra Titoc                     Sep 2024 - Sep 2024
+   4.  Maksym Sobolyev (@sobomax)          Feb 2023 - Feb 2023
+   5.  Liviu Chircu (@liviuchircu)         Mar 2014 - Apr 2021
    6.  Vlad Patrascu (@rvlad-patrascu)     May 2017 - Apr 2019
    7.  Peter Lemenkov (@lemenkov)          Jun 2018 - Jun 2018
    8.  Walter Doekes (@wdoekes)            May 2014 - May 2014
@@ -376,8 +380,8 @@ Chapter 3. Documentation
 
 3.1. Contributors
 
-   Last edited by: Liviu Chircu (@liviuchircu), Bogdan-Andrei
-   Iancu (@bogdan-iancu), Razvan Crainea (@razvancrainea), Peter
+   Last edited by: Razvan Crainea (@razvancrainea), Liviu Chircu
+   (@liviuchircu), Bogdan-Andrei Iancu (@bogdan-iancu), Peter
    Lemenkov (@lemenkov), Vlad Patrascu (@rvlad-patrascu),
    Daniel-Constantin Mierla (@miconda), Konstantin Bokarius, Edson
    Gellert Schubert, Anca Vamanu, Henning Westerholt (@henningw),

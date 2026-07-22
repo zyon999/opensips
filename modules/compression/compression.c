@@ -91,7 +91,6 @@
 #define WORD(p) (*(p + 0) + (*(p + 1) << 8))
 #define DWORD(p) (*(p+0) + (*(p+1) << 8) + (*(p+2) << 16) + (*(p+3) << 24))
 
-#define LOWER_CASE(p) (*(p) & 0x20)
 #define BUFLEN 4096
 
 #define COMPACT_FORMS	"cfiklmstvx"
@@ -292,8 +291,9 @@ void wrap_tm_func(struct cell* t, int type, struct tmcb_params* p)
 	mc_whitelist_p wh_list = NULL;
 	struct mc_compact_args* mc_compact_args = NULL;
 	struct mc_comp_args* args = NULL;
-	char* buf = t->uac[p->code].request.buffer.s;
-	int olen = t->uac[p->code].request.buffer.len;
+	struct ua_client *uac = & TM_BRANCH( t, p->code);
+	char* buf = uac->request.buffer.s;
+	int olen = uac->request.buffer.len;
 
 	switch (type) {
 		case COMPRESS_CB:
@@ -332,10 +332,10 @@ void wrap_tm_func(struct cell* t, int type, struct tmcb_params* p)
 	if (ret < 0)
 		return;
 
-	t->uac[p->code].request.buffer.s = buf;
-	t->uac[p->code].request.buffer.len = olen;
+	uac->request.buffer.s = buf;
+	uac->request.buffer.len = olen;
 	/* we also need to compute the uri so that it points within the new buffer */
-	t->uac[p->code].uri.s = buf + t->method.len + 1;
+	uac->uri.s = buf + t->method.len + 1;
 	/* uri.len should be the same, since it is not changed by compression */
 }
 
@@ -898,32 +898,19 @@ static int mc_compact_cb(char** buf_p, struct mc_compact_args *mc_compact_args, 
 			i = HDR_OTHER_T;
 again:
 		if (hdr_mask[i]) {
-			/* Compact form name so the header have
-				to be built */
-			if (LOWER_CASE(hdr_mask[i]->name.s) ||
-				hdr_mask[i]->type == HDR_CONTENTLENGTH_T) {
-				/* Copy the name of the header */
-				wrap_copy_and_update(&new_buf.s,
-					hdr_mask[i]->name.s,
-					hdr_mask[i]->name.len, &new_buf.len);
+			/* Copy the name of the header */
+			wrap_copy_and_update(&new_buf.s,
+				hdr_mask[i]->name.s,
+				hdr_mask[i]->name.len, &new_buf.len);
 
-				/* Copy the ': ' delimiter*/
-				wrap_copy_and_update(&new_buf.s, DELIM,
-						DELIM_LEN, &new_buf.len);
-				/* Copy the first field of the header*/
-				wrap_copy_and_update(&new_buf.s,
-					hdr_mask[i]->body.s,
-					hdr_mask[i]->body.len, &new_buf.len);
-			/* Normal form header so it can be copied in one step */
-			} else {
-				wrap_copy_and_update(
-					&new_buf.s,
-					hdr_mask[i]->name.s,
-					/* Possible siblings. No CRLF yet */
-					hdr_mask[i]->len - CRLF_LEN,
-					&new_buf.len
-				);
-			}
+			/* Copy the ': ' delimiter*/
+			wrap_copy_and_update(&new_buf.s, DELIM,
+					DELIM_LEN, &new_buf.len);
+
+			/* Copy the first field of the header*/
+			wrap_copy_and_update(&new_buf.s,
+				hdr_mask[i]->body.s,
+				hdr_mask[i]->body.len, &new_buf.len);
 
 			/* Copy the rest of the header fields(siblings)
 							if they exist */
@@ -1004,6 +991,10 @@ again:
 
 	memcpy(*buf_p, new_buf.s, new_buf.len);
 	*olen = new_buf.len;
+
+	if (new_buf.len > msg_total_len)
+		LM_BUG("buffer overflow: "\
+			"calculated=%d, actual=%d\n", msg_total_len, new_buf.len);
 
 	/* Free the vector */
 	pkg_free(hdr_mask);
@@ -1833,7 +1824,7 @@ static int mc_decompress(struct sip_msg* msg)
 
 	switch (hdrs_algo) {
 		case 0: /* deflate */
-			temp = (unsigned long)BUFLEN;
+			temp = (unsigned long)sizeof(hdr_buf);
 
 			rc = uncompress((unsigned char*)hdr_buf,
 					&temp,

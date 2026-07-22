@@ -607,12 +607,10 @@ static const param_export_t params[] = {
  * MI commands
  */
 static const mi_export_t mi_cmds[] = {
-	{ "sip_capture", 0, 0, 0, {
+	{ "capture", 0, 0, 0, {
 		{sip_capture_mi, {0}},
 		{sip_capture_mi_1, {"capture_mode", 0}},
-		{EMPTY_MI_RECIPE}
-		}
-	},
+		{EMPTY_MI_RECIPE}}, {"sip_capture", 0}},
 	{EMPTY_MI_EXPORT}
 };
 
@@ -1698,6 +1696,11 @@ static int del_hep_chunk(struct hepv3* h3, unsigned int chunk_id)
 	/* payload */
 	case HEP_PAYLOAD:
 	case HEP_COMPRESSED_PAYLOAD/* gzipped payload */:
+		if (h3->payload_chunk_free) {
+			pkg_free(h3->payload_chunk.data);
+			h3->payload_chunk_free = 0;
+		}
+		h3->payload_chunk.data = NULL;
 		h3->payload_chunk.chunk.length = 0;
 
 		break;
@@ -2141,6 +2144,10 @@ set_generic_hep_chunk(struct hepv3* h3, unsigned chunk_id, str *data)
 			return -1;
 		}
 
+		if (h3->payload_chunk_free) {
+			pkg_free(h3->payload_chunk.data);
+			h3->payload_chunk_free = 0;
+		}
 		memcpy(payload_buf, data->s, data->len);
 		h3->payload_chunk.data = payload_buf;
 		h3->payload_chunk.chunk.length = data->len + sizeof(hep_chunk_t);
@@ -2873,7 +2880,7 @@ db_async_store(db_val_t* vals, db_key_t* keys, int num_keys,
 	if (!DB_CAPABILITY(db_funcs, DB_CAP_ASYNC_RAW_QUERY)) {
 		LM_WARN("This database module does not have async queries!"
 				"Using sync insert!\n");
-		actx->resume_f     = NULL;
+		ASYNC_CLEAR_RESUME_F(actx);
 		actx->resume_param = NULL;
 		async_status  = ASYNC_NO_IO;
 		return db_sync_store(vals, keys, num_keys);
@@ -2881,7 +2888,7 @@ db_async_store(db_val_t* vals, db_key_t* keys, int num_keys,
 
 	if (HAVE_MULTIPLE_ASYNC_INSERT && t_el == NULL) {
 		LM_ERR("can't do multiple insert!\n");
-		actx->resume_f     = NULL;
+		ASYNC_CLEAR_RESUME_F(actx);
 		actx->resume_param = NULL;
 		return -1;
 	}
@@ -2918,11 +2925,11 @@ db_async_store(db_val_t* vals, db_key_t* keys, int num_keys,
 			RELEASE_QUERY_LOCK(crt_as_query);
 
 		if (read_fd < 0) {
-			actx->resume_f     = NULL;
+			ASYNC_CLEAR_RESUME_F(actx);
 			actx->resume_param = NULL;
 			return -1;
 		}
-		actx->resume_f     = resume_async_dbquery;
+		ASYNC_SET_RESUME_F(actx, resume_async_dbquery);
 		actx->resume_param = as_param;
 		async_status = read_fd;
 

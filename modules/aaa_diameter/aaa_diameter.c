@@ -100,8 +100,7 @@ static const param_export_t params[] =
 static const mi_export_t mi_cmds[] = {
 	{ "fd_log_level", 0, 0, 0, {
 		{NULL, {"log_level", 0}},
-		{EMPTY_MI_RECIPE}}
-	},
+		{EMPTY_MI_RECIPE}}, {0}},
 	{EMPTY_MI_EXPORT}
 };
 
@@ -338,8 +337,8 @@ static int dm_send_request(struct sip_msg *msg, int *app_id, int *cmd_code,
 		pv_value_t val = {(str){rpl_avps, strlen(rpl_avps)}, 0, PV_VAL_STR};
 		if (pv_set_value(msg, rpl_avps_pv, 0, &val) != 0)
 			LM_ERR("failed to set output rpl_avps pv to: %s\n", rpl_avps);
-		_dm_release_message_response(rpl, rpl_avps);
 	}
+	_dm_release_message_response(rpl, rpl_avps);
 
 	if (rc != 0) {
 		LM_ERR("Diameter request failed (rc: %d)\n", rc);
@@ -473,21 +472,22 @@ struct dm_async_msg {
 	struct dm_cond *cond;
 };
 
-static struct dm_async_msg *dm_get_async_msg(pv_spec_t *rpl_avps_pv, aaa_message *dmsg)
+static struct dm_async_msg *dm_get_async_msg(pv_spec_t *rpl_avps_pv, struct dm_cond *cond)
 {
 	struct dm_async_msg *msg = pkg_malloc(sizeof *msg);
 	if (!msg)
 		return NULL;
 	memset(msg, 0, sizeof *msg);
 	msg->ret = rpl_avps_pv;
-	msg->cond = ((struct dm_message *)(dmsg->avpair))->reply_cond;
+	msg->cond = cond;
+	dm_cond_ref(cond);
 	return msg;
 }
 
 static void dm_free_sync_msg(struct dm_async_msg *amsg)
 {
 	if (amsg->cond)
-		shm_free(amsg->cond);
+		dm_cond_unref(amsg->cond);
 	pkg_free(amsg);
 }
 
@@ -521,8 +521,7 @@ static int dm_send_request_async_reply(int fd,
 error:
 	if (amsg->ret && pv_set_value(msg, amsg->ret, 0, &val) != 0)
 		LM_ERR("failed to set output rpl_avps pv to NULL\n");
-	if (rpl_avps)
-		_dm_release_message_response(amsg->cond, rpl_avps);
+	_dm_release_message_response(amsg->cond, rpl_avps);
 	dm_free_sync_msg(amsg);
 	return ret;
 }
@@ -530,11 +529,18 @@ error:
 static int dm_send_request_async_tout(int fd,
 		struct sip_msg *msg, void *param)
 {
+	int removed;
 	struct dm_async_msg *amsg = (struct dm_async_msg *)param;
 	pv_value_t val = {STR_NULL, 0, PV_VAL_NULL};
 
+	async_status = ASYNC_DONE_CLOSE_FD;
+
 	if (pv_set_value(msg, amsg->ret, 0, &val) != 0)
 		LM_ERR("failed to set output rpl_avps pv to NULL\n");
+
+	removed = dm_drop_pending_reply_cond(amsg->cond);
+	if (removed > 0)
+		dm_cond_unref(amsg->cond);
 
 	dm_free_sync_msg(amsg);
 	return -2;
@@ -547,6 +553,7 @@ static int dm_send_request_async(struct sip_msg *msg, async_ctx *ctx,
 	struct dict_object *req;
 	cJSON *avps;
 	struct dm_async_msg *amsg;
+	struct dm_cond *cond;
 
 	if (fd_dict_search(fd_g_config->cnf_dict, DICT_COMMAND, CMD_BY_CODE_R,
 	      cmd_code, &req, ENOENT) == ENOENT) {
@@ -586,17 +593,17 @@ static int dm_send_request_async(struct sip_msg *msg, async_ctx *ctx,
 		_dm_destroy_message(dmsg);
 		goto error;
 	}
-	if (_dm_send_message_async(NULL, dmsg, &async_status) < 0) {
+	if (_dm_send_message_async(NULL, dmsg, &async_status, &cond) < 0) {
 		LM_ERR("cannot send async message!\n");
 		goto error;
 	}
 
-	amsg = dm_get_async_msg(rpl_avps_pv, dmsg);
+	amsg = dm_get_async_msg(rpl_avps_pv, cond);
 	if (!amsg)
 		goto error;
 	cJSON_Delete(avps);
 
-	ctx->resume_f = dm_send_request_async_reply;
+	ASYNC_SET_RESUME_F(ctx, dm_send_request_async_reply);
 	ctx->resume_param = amsg;
 	ctx->timeout_s = dm_answer_timeout / 1000;
 	ctx->timeout_f = dm_send_request_async_tout;

@@ -157,9 +157,9 @@ static const param_export_t params[]={
 #define UA_REPLY_MI_PARAMS "key", "method", "code", "reason"
 
 static const mi_export_t mi_cmds[] = {
-	{ "b2be_list", 0,0,0,{
+	{ "list", 0,0,0, {
 		{mi_b2be_list, {0}},
-		{EMPTY_MI_RECIPE}}
+		{EMPTY_MI_RECIPE}}, {"b2be_list", 0}
 	},
 	{ "ua_session_client_start", 0, 0, 0, {
 		{b2b_ua_session_client_start, {UA_START_MI_PARAMS, 0}},
@@ -237,7 +237,7 @@ static const mi_export_t mi_cmds[] = {
 			"extra_headers", "flags", "socket", 0}},
 		{b2b_ua_session_client_start, {UA_START_MI_PARAMS, "proxy", "body",
 			"content_type", "extra_headers", "flags", "socket", 0}},
-		{EMPTY_MI_RECIPE}}
+		{EMPTY_MI_RECIPE}}, {0}
 	},
 	{ "ua_session_update", 0, 0, 0, {
 		{b2b_ua_mi_update, {UA_UPDATE_MI_PARAMS, 0}},
@@ -247,7 +247,7 @@ static const mi_export_t mi_cmds[] = {
 		{b2b_ua_mi_update, {UA_UPDATE_MI_PARAMS, "body", "extra_headers", 0}},
 		{b2b_ua_mi_update, {UA_UPDATE_MI_PARAMS, "body", "content_type",
 			"extra_headers", 0}},
-		{EMPTY_MI_RECIPE}}
+		{EMPTY_MI_RECIPE}}, {0}
 	},
 	{ "ua_session_reply", 0, 0, 0, {
 		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, 0}},
@@ -257,17 +257,17 @@ static const mi_export_t mi_cmds[] = {
 		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, "body", "extra_headers", 0}},
 		{b2b_ua_mi_reply, {UA_REPLY_MI_PARAMS, "body", "content_type",
 			"extra_headers", 0}},
-		{EMPTY_MI_RECIPE}}
+		{EMPTY_MI_RECIPE}}, {0}
 	},
 	{ "ua_session_terminate", 0, 0, 0, {
 		{b2b_ua_mi_terminate, {"key", 0}},
 		{b2b_ua_mi_terminate, {"key", "extra_headers", 0}},
-		{EMPTY_MI_RECIPE}}
+		{EMPTY_MI_RECIPE}}, {0}
 	},
 	{ "ua_session_list", 0,0,0,{
 		{b2b_ua_session_list, {0}},
 		{b2b_ua_session_list, {"key", 0}},
-		{EMPTY_MI_RECIPE}}
+		{EMPTY_MI_RECIPE}}, {0}
 	},
 	{EMPTY_MI_EXPORT}
 };
@@ -774,8 +774,8 @@ str *b2b_get_b2bl_key(str* callid, str* from_tag, str* to_tag, str* entity_key)
 		tuple_key->len = dlg->logic_key.len;
 		if (entity_key) {
 			if (table == server_htable) {
-				entity_key->s = to_tag->s;
-				entity_key->len = to_tag->len;
+				*entity_key = *to_tag;
+				b2b_get_server_entity_key(entity_key);
 			} else {
 				entity_key->s = callid->s;
 				entity_key->len = callid->len;
@@ -836,6 +836,7 @@ int b2b_entities_bind(b2b_api_t* api)
 	api->get_b2bl_key       = b2b_get_b2bl_key;
 	api->apply_lumps        = b2b_apply_lumps;
 	api->get_context		= b2b_get_context;
+	api->get_reply_leg      = b2b_get_reply_leg;
 
 	return 0;
 }
@@ -1057,4 +1058,3 @@ error:
 	free_mi_response(resp);
 	return NULL;
 }
-

@@ -47,6 +47,7 @@
 #include "../../ut.h"
 #include "../../lib/sliblist.h"
 #include "../../reactor_proc.h"
+#include "../../profiling.h"
 #include "httpd_load.h"
 #include "httpd_proc.h"
 
@@ -59,6 +60,9 @@ extern int post_buf_size;
 extern str tls_cert_file;
 extern str tls_key_file;
 extern str tls_ciphers;
+extern str auth_realm;
+extern str auth_username;
+extern str auth_password;
 extern struct httpd_cb *httpd_cb_list;
 static union sockaddr_union httpd_server_info;
 
@@ -71,6 +75,8 @@ static const str MI_HTTP_U_URL = str_init("<html><body>"
 "Unable to parse URL!</body></html>");
 static const str MI_HTTP_U_METHOD = str_init("<html><body>"
 "Unsupported HTTP request!</body></html>");
+static const str MI_HTTP_UNAUTH = str_init("<html><body>"
+"Unauthorized</body></html>");
 
 static char * load_file(char * );
 
@@ -290,13 +296,18 @@ static MHD_RET post_iterator (void *cls,
 	LM_DBG("[%.*s]->[%.*s]\n", key_len, key, (int)size, value);
 
 	kv = (str_str_t*)slinkedl_append(pr->p_list,
-						sizeof(str_str_t) + key_len + size);
+						sizeof(str_str_t) + key_len + size + 1);
+	if (!kv) {
+		LM_ERR("oom\n");
+		pr->status = -1; return MHD_NO;
+	}
 	p = (char*)(kv + 1);
 	kv->key.len = key_len; kv->key.s = p;
 	memcpy(p, key, key_len);
 	p += key_len;
 	kv->val.len = size; kv->val.s = p;
 	memcpy(p, value, size);
+	p[size] = '\0';
 	LM_DBG("inserting element pr=[%p] pp=[%p] p_list=[%p]\n",
 				pr, pr->pp, pr->p_list);
 
@@ -464,6 +475,47 @@ MHD_RET answer_to_connection (void *cls, struct MHD_Connection *connection,
 
 	pr = *con_cls;
 	if(pr == NULL){
+		/* first call for this request -- check auth before allocating */
+		if (auth_username.s) {
+			char *user = NULL;
+			char *pass = NULL;
+
+			user = MHD_basic_auth_get_username_password(connection,
+				&pass);
+			if (!user || !pass ||
+					strlen(user) != auth_username.len ||
+					strlen(pass) != auth_password.len ||
+					memcmp(user, auth_username.s,
+						auth_username.len) != 0 ||
+					memcmp(pass, auth_password.s,
+						auth_password.len) != 0) {
+				LM_WARN("rejected unauthenticated HTTP request "
+					"for %s\n", url);
+				response = MHD_create_response_from_buffer(
+					MI_HTTP_UNAUTH.len,
+					(void *)MI_HTTP_UNAUTH.s,
+					MHD_RESPMEM_PERSISTENT);
+				ret = MHD_queue_basic_auth_fail_response(
+					connection, auth_realm.s, response);
+				MHD_destroy_response(response);
+#if MHD_VERSION >= 0x00093800
+				if (user) MHD_free(user);
+				if (pass) MHD_free(pass);
+#else
+				if (user) free(user);
+				if (pass) free(pass);
+#endif
+				return ret;
+			}
+#if MHD_VERSION >= 0x00093800
+			MHD_free(user);
+			MHD_free(pass);
+#else
+			free(user);
+			free(pass);
+#endif
+		}
+
 		pr = pkg_malloc(sizeof(struct post_request));
 		if(pr==NULL) {
 			LM_ERR("oom while allocating post_request structure\n");
@@ -473,6 +525,8 @@ MHD_RET answer_to_connection (void *cls, struct MHD_Connection *connection,
 		*con_cls = pr;
 		pr = NULL;
 	}
+
+	profiling_proc_start( LEVEL_EXTRAPROCS, 1);
 
 	/* we're safe here since this returns a struct sockaddr* and
 	 * sockaddr_union contains sockaddr* inside */
@@ -486,7 +540,7 @@ MHD_RET answer_to_connection (void *cls, struct MHD_Connection *connection,
 	sv_sockfd = MHD_get_connection_info(connection, MHD_CONNECTION_INFO_CONNECTION_FD)->connect_fd;
 	if (getsockname( sv_sockfd, &httpd_server_info.s, &addrlen) < 0) {
 		LM_ERR("cannot resolve server's IP: %s:%d\n", strerror(errno), errno);
-		return MHD_NO;
+		goto mhd_no;
 	}
 
 	/* we could do
@@ -503,7 +557,7 @@ MHD_RET answer_to_connection (void *cls, struct MHD_Connection *connection,
 			pr->p_list = slinkedl_init(&httpd_alloc, &httpd_free);
 			if (pr->p_list==NULL) {
 				LM_ERR("oom while allocating list\n");
-				return MHD_NO;
+				goto mhd_no;
 			}
 			LM_DBG("running MHD_create_post_processor\n");
 			pr->pp = MHD_create_post_processor(connection,
@@ -514,7 +568,7 @@ MHD_RET answer_to_connection (void *cls, struct MHD_Connection *connection,
 					pr, pr->pp, pr->p_list);
 
 			/* We need to wait for the actual data in the POST request */
-			return MHD_YES;
+			goto mhd_yes;
 		} else {
 			if (pr->pp==NULL) {
 				if (*upload_data_size == 0) {
@@ -529,11 +583,14 @@ MHD_RET answer_to_connection (void *cls, struct MHD_Connection *connection,
 							saved_body.len = httpd_receive_buff_pos;
 							saved_body.s = httpd_receive_buff;
 						}
+						profiling_proc_enter( LEVEL_EXTRAPROCS,
+							ss_merge256("HTTPD_CB ",(char*)normalised_url), 0);
 						ret_code = cb->callback(cls, (void*)connection,
 								normalised_url,
 								method, version,
 								saved_body.s, saved_body.len,
 								con_cls, &buffer, &page, cl_socket);
+						profiling_proc_exit( LEVEL_EXTRAPROCS, "HTTPD_CB", ret_code);
 					} else {
 						page = MI_HTTP_U_URL;
 						ret_code = MHD_HTTP_BAD_REQUEST;
@@ -550,12 +607,12 @@ MHD_RET answer_to_connection (void *cls, struct MHD_Connection *connection,
 											&getConnectionHeader, pr);
 				if (pr->content_type==0) {
 					LM_ERR("missing Content-Type header\n");
-					return MHD_NO;
+					goto mhd_no;
 				}
 				if (pr->content_type<0) {
 					/* Unexpected Content-Type header:
 					err log printed in getConnectionHeader() */
-					return MHD_NO;
+					goto mhd_no;
 				}
 				LM_DBG("got ContentType [%d] with len [%d]: %.*s\n",
 					pr->content_type, pr->content_len,
@@ -567,7 +624,11 @@ MHD_RET answer_to_connection (void *cls, struct MHD_Connection *connection,
 					/* Save the entire body as the '1' key */
 					kv = (str_str_t*)slinkedl_append(pr->p_list,
 							sizeof(str_str_t) + 1 +
-							*upload_data_size);
+							*upload_data_size + 1);
+					if (!kv) {
+						LM_ERR("oom\n");
+						goto mhd_no;
+					}
 					p = (char*)(kv + 1);
 					kv->key.len = 1; kv->key.s = p;
 					memcpy(p, "1", 1);
@@ -575,15 +636,16 @@ MHD_RET answer_to_connection (void *cls, struct MHD_Connection *connection,
 					kv->val.len = *upload_data_size;
 					kv->val.s = p;
 					memcpy(p, upload_data, *upload_data_size);
+					p[*upload_data_size] = '\0';
 					break;
 				default:
 					LM_ERR("Unhandled data for ContentType [%d]\n",
 							pr->content_type);
-					return MHD_NO;
+					goto mhd_no;
 				}
 				/* Mark the fact that we consumed all data */
 				*upload_data_size = 0;
-				return MHD_YES;
+				goto mhd_yes;
 			}
 			LM_DBG("running MHD_post_process: "
 					"pp=%p status=%d upload_data_size=%zu\n",
@@ -594,13 +656,13 @@ MHD_RET answer_to_connection (void *cls, struct MHD_Connection *connection,
 				/* FIXME:
 				 * It might be better to reply with an error
 				 * instead of resetting the connection via MHD_NO */
-				return MHD_NO;
+				goto mhd_no;
 			}
 			ret =MHD_post_process(pr->pp, upload_data, *upload_data_size);
 			LM_DBG("ret=%d upload_data_size=%zu\n", ret, *upload_data_size);
 			if(*upload_data_size != 0) {
 				*upload_data_size = 0;
-				return MHD_YES;
+				goto mhd_yes;
 			}
 
 			LM_DBG("running MHD_destroy_post_processor: "
@@ -615,11 +677,14 @@ MHD_RET answer_to_connection (void *cls, struct MHD_Connection *connection,
 			if (cb) {
 				normalised_url = &url[cb->http_root->len+1];
 				LM_DBG("normalised_url=[%s]\n", normalised_url);
+				profiling_proc_enter( LEVEL_EXTRAPROCS,
+					ss_merge256("HTTPD_CB ",(char*)normalised_url), 0 );
 				ret_code = cb->callback(cls, (void*)connection,
 						normalised_url,
 						method, version,
 						upload_data, *upload_data_size, con_cls,
 						&buffer, &page, cl_socket);
+				profiling_proc_exit( LEVEL_EXTRAPROCS, "HTTPD_CB", ret_code);
 			} else {
 				page = MI_HTTP_U_URL;
 				ret_code = MHD_HTTP_BAD_REQUEST;
@@ -637,11 +702,14 @@ MHD_RET answer_to_connection (void *cls, struct MHD_Connection *connection,
 		if (cb) {
 			normalised_url = &url[cb->http_root->len+1];
 			LM_DBG("normalised_url=[%s]\n", normalised_url);
+			profiling_proc_enter( LEVEL_EXTRAPROCS,
+				ss_merge256("HTTPD_CB ",(char*)normalised_url), 0 );
 			ret_code = cb->callback(cls, (void*)connection,
 					normalised_url,
 					method, version,
 					upload_data, *upload_data_size, con_cls,
 					&buffer, &page, cl_socket);
+			profiling_proc_exit( LEVEL_EXTRAPROCS, "HTTPD_CB", ret_code);
 		} else {
 			page = MI_HTTP_U_URL;
 			ret_code = MHD_HTTP_BAD_REQUEST;
@@ -677,7 +745,7 @@ send_response:
 							(void*)async_data,
 							NULL);
 	} else {
-		return MHD_NO;
+		goto mhd_no;
 	}
 
 	if (cb && cb->type>0) {
@@ -706,7 +774,16 @@ send_response:
 	ret = MHD_queue_response (connection, ret_code, response);
 	MHD_destroy_response (response);
 
+	profiling_proc_end( LEVEL_EXTRAPROCS, ret );
 	return ret;
+
+mhd_yes:
+	profiling_proc_end( LEVEL_EXTRAPROCS, MHD_YES );
+	return MHD_YES;
+
+mhd_no:
+	profiling_proc_end( LEVEL_EXTRAPROCS, MHD_NO );
+	return MHD_NO;
 }
 #endif
 

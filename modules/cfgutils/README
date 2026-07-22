@@ -738,7 +738,7 @@ if(shuffle_avps( $avp(foo) ))
    Example 1.27. async sleep usage
 {
 ...
-async( sleep("5"), after_sleep );
+async( sleep(5), after_sleep );
 }
 
 route[after_sleep] {
@@ -759,7 +759,7 @@ route[after_sleep] {
    Example 1.28. async usleep usage
 {
 ...
-async( usleep("1000"), after_usleep );
+async( usleep(1000), after_usleep );
 }
 
 route[after_usleep] {
@@ -938,11 +938,11 @@ Chapter 2. Contributors
    Table 2.1. Top contributors by DevScore^(1), authored
    commits^(2) and lines added/removed^(3)
      Name DevScore Commits Lines ++ Lines --
-   1. Liviu Chircu (@liviuchircu) 94 44 2966 1512
-   2. Henning Westerholt (@henningw) 30 18 1088 86
-   3. Bogdan-Andrei Iancu (@bogdan-iancu) 29 23 462 109
-   4. Vlad Patrascu (@rvlad-patrascu) 21 7 357 548
-   5. Razvan Crainea (@razvancrainea) 20 15 289 79
+   1. Liviu Chircu (@liviuchircu) 96 45 2967 1512
+   2. Bogdan-Andrei Iancu (@bogdan-iancu) 30 24 464 111
+   3. Henning Westerholt (@henningw) 30 18 1088 86
+   4. Razvan Crainea (@razvancrainea) 23 18 299 96
+   5. Vlad Patrascu (@rvlad-patrascu) 20 7 357 548
    6. Elena-Ramona Modroiu 14 3 1183 7
    7. Daniel-Constantin Mierla (@miconda) 12 10 84 32
    8. Maksym Sobolyev (@sobomax) 7 5 24 18
@@ -950,8 +950,9 @@ Chapter 2. Contributors
    10. Ionel Cerghit (@ionel-cerghit) 5 1 18 161
 
    All remaining contributors: Vlad Paiu (@vladpaiu), Sergio
-   Gutierrez, Konstantin Bokarius, Walter Doekes (@wdoekes), Peter
-   Lemenkov (@lemenkov), Edson Gellert Schubert, Alexandra Titoc.
+   Gutierrez, Konstantin Bokarius, Norman Brandinger (@NormB),
+   Walter Doekes (@wdoekes), Peter Lemenkov (@lemenkov), Edson
+   Gellert Schubert, Alexandra Titoc.
 
    (1) DevScore = author_commits + author_lines_added /
    (project_lines_added / project_commits) + author_lines_deleted
@@ -961,7 +962,7 @@ Chapter 2. Contributors
    merge commits. Regarding imported patches/code, we do our best
    to count the work on behalf of the proper owner, as per the
    "fix_authors" and "mod_renames" arrays in
-   opensips/doc/build-contrib.sh. If you identify any
+   opensips/docs/build-contrib.sh. If you identify any
    patches/commits which do not get properly attributed to you,
    please submit a pull request which extends "fix_authors" and/or
    "mod_renames".
@@ -973,21 +974,21 @@ Chapter 2. Contributors
 
    Table 2.2. Most recently active contributors^(1) to this module
                       Name                   Commit Activity
-   1.  Alexandra Titoc                     Sep 2024 - Sep 2024
-   2.  Liviu Chircu (@liviuchircu)         Sep 2012 - May 2024
-   3.  Bogdan-Andrei Iancu (@bogdan-iancu) Jul 2007 - Feb 2024
-   4.  Maksym Sobolyev (@sobomax)          Dec 2015 - Nov 2023
-   5.  Vlad Patrascu (@rvlad-patrascu)     May 2017 - May 2023
-   6.  Razvan Crainea (@razvancrainea)     Oct 2010 - Jan 2020
-   7.  Peter Lemenkov (@lemenkov)          Jun 2018 - Jun 2018
-   8.  Ionel Cerghit (@ionel-cerghit)      Dec 2015 - Dec 2015
-   9.  Walter Doekes (@wdoekes)            Jan 2015 - Jan 2015
-   10. Vlad Paiu (@vladpaiu)               Jan 2013 - Jul 2014
+   1.  Norman Brandinger (@NormB)          Jul 2026 - Jul 2026
+   2.  Liviu Chircu (@liviuchircu)         Sep 2012 - Jun 2026
+   3.  Razvan Crainea (@razvancrainea)     Oct 2010 - Jun 2026
+   4.  Bogdan-Andrei Iancu (@bogdan-iancu) Jul 2007 - Apr 2026
+   5.  Alexandra Titoc                     Sep 2024 - Sep 2024
+   6.  Maksym Sobolyev (@sobomax)          Dec 2015 - Nov 2023
+   7.  Vlad Patrascu (@rvlad-patrascu)     May 2017 - May 2023
+   8.  Peter Lemenkov (@lemenkov)          Jun 2018 - Jun 2018
+   9.  Ionel Cerghit (@ionel-cerghit)      Dec 2015 - Dec 2015
+   10. Walter Doekes (@wdoekes)            Jan 2015 - Jan 2015
 
-   All remaining contributors: Anca Vamanu, Sergio Gutierrez,
-   Henning Westerholt (@henningw), Daniel-Constantin Mierla
-   (@miconda), Elena-Ramona Modroiu, Konstantin Bokarius, Edson
-   Gellert Schubert.
+   All remaining contributors: Vlad Paiu (@vladpaiu), Anca Vamanu,
+   Sergio Gutierrez, Henning Westerholt (@henningw),
+   Daniel-Constantin Mierla (@miconda), Elena-Ramona Modroiu,
+   Konstantin Bokarius, Edson Gellert Schubert.
 
    (1) including any documentation-related commits, excluding
    merge commits
@@ -996,12 +997,13 @@ Chapter 3. Documentation
 
 3.1. Contributors
 
-   Last edited by: Bogdan-Andrei Iancu (@bogdan-iancu), Liviu
-   Chircu (@liviuchircu), Razvan Crainea (@razvancrainea), Peter
-   Lemenkov (@lemenkov), Vlad Patrascu (@rvlad-patrascu), Anca
-   Vamanu, Sergio Gutierrez, Henning Westerholt (@henningw),
-   Daniel-Constantin Mierla (@miconda), Elena-Ramona Modroiu,
-   Konstantin Bokarius, Edson Gellert Schubert.
+   Last edited by: Norman Brandinger (@NormB), Razvan Crainea
+   (@razvancrainea), Bogdan-Andrei Iancu (@bogdan-iancu), Liviu
+   Chircu (@liviuchircu), Peter Lemenkov (@lemenkov), Vlad
+   Patrascu (@rvlad-patrascu), Anca Vamanu, Sergio Gutierrez,
+   Henning Westerholt (@henningw), Daniel-Constantin Mierla
+   (@miconda), Elena-Ramona Modroiu, Konstantin Bokarius, Edson
+   Gellert Schubert.
 
    Documentation Copyrights:
 

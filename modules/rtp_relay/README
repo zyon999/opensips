@@ -28,15 +28,17 @@ RTP Relay Module
 
         1.7. Exported MI Functions
 
-              1.7.1. rtp_relay_list
-              1.7.2. rtp_relay_update
-              1.7.3. rtp_relay_update_callid
+              1.7.1. rtp_relay:list
+              1.7.2. rtp_relay:update
+              1.7.3. rtp_relay:update_callid
 
         1.8. Exported Pseudo-Variables
 
               1.8.1. $rtp_relay
               1.8.2. $rtp_relay_peer
-              1.8.3. $rtp_relay_ctx()
+              1.8.3. $rtp_relay_caller
+              1.8.4. $rtp_relay_callee
+              1.8.5. $rtp_relay_ctx()
 
    2. Contributors
 
@@ -69,9 +71,9 @@ RTP Relay Module
    1.11. Set rtp_relay_copy_delete parameter
    1.12. Set rtp_relay_copy_delete usage
    1.13. rtp_relay_engage usage
-   1.14. rtp_relay_list usage
-   1.15. rtp_relay_update usage
-   1.16. rtp_relay_update_callid usage
+   1.14. rtp_relay:list usage
+   1.15. rtp_relay:update usage
+   1.16. rtp_relay:update_callid usage
 
 Chapter 1. Admin Guide
 
@@ -93,9 +95,10 @@ Chapter 1. Admin Guide
    throughout the entire RTP session, and are being used for
    further in-dialog requests. These flags can be specified
    through the $rtp_relay and/or $rtp_relay_peer variables at
-   initial INVITE, and are then passed along with the RTP relay
-   context until the end of the call. They can also be modified
-   during sequential in-dialog requests.
+   initial INVITE, or through the absolute $rtp_relay_caller and
+   $rtp_relay_callee variables, and are then passed along with the
+   RTP relay context until the end of the call. They can also be
+   modified during sequential in-dialog requests.
 
    This is not a stand-alone module that communicates directly
    with RTP relays, but rather a generic interface that is able to
@@ -457,13 +460,23 @@ route[rtp_relay_copy_delete] {
    further media requests.
 
    The RTP session modifiers used are the ones provisioned through
-   the $rtp_relay and/or $rtp_relay_peer variables.
+   the $rtp_relay, $rtp_relay_peer, $rtp_relay_caller and/or
+   $rtp_relay_callee variables.
 
    The function can be called from the main request route - in
    this case the RTP relay will be engaged for any further
    branches created, or from the branch route - in this case the
    RTP relay will only be engaged for the branch where it was
    called, or that has an associated rtp_relay provisioned.
+
+   When using the scope-relative $rtp_relay variable together with
+   this function, note that its meaning depends on where it is
+   used. In the main request route of the initial INVITE,
+   $rtp_relay refers to the caller and $rtp_relay_peer refers to
+   the callee. In a branch route, $rtp_relay refers to the callee
+   branch and $rtp_relay_peer refers to the caller. To avoid
+   depending on this route scope, use $rtp_relay_caller and
+   $rtp_relay_callee instead.
 
    Meaning of the parameters is as follows:
      * engine(string) - the RTP relay engine to be used for the
@@ -485,7 +498,9 @@ if (is_method("INVITE") && !has_totag()) {
 
 1.7. Exported MI Functions
 
-1.7.1. rtp_relay_list
+1.7.1. rtp_relay:list
+
+   Replaces obsolete MI command: rtp_relay_list.
 
    Lists all the RTP Relay sessions engaged.
 
@@ -497,16 +512,18 @@ if (is_method("INVITE") && !has_totag()) {
      * node - (optional) the RTP relay node. When used, the engine
        parameter must also be specified.
 
-   Example 1.14.  rtp_relay_list usage
+   Example 1.14.  rtp_relay:list usage
 ...
 ## list all sessions
-$ opensips-cli -x mi rtp_relay_list
+$ opensips-cli -x mi rtp_relay:list
 
 ## list all sessions going through a specific RTP node
-$ opensips-cli -x mi rtp_relay_list rtpproxy udp:127.0.0.1:2222
+$ opensips-cli -x mi rtp_relay:list rtpproxy udp:127.0.0.1:2222
 ...
 
-1.7.2. rtp_relay_update
+1.7.2. rtp_relay:update
+
+   Replaces obsolete MI command: rtp_relay_update.
 
    Updates/Re-engages the RTP relays in all ongoing RTP relay
    sessions.
@@ -538,19 +555,21 @@ $ opensips-cli -x mi rtp_relay_list rtpproxy udp:127.0.0.1:2222
      * new_node - (optional) a new RTP node to be used for the
        call. If new_set is missing, the same set will be used.
 
-   Example 1.15.  rtp_relay_update usage
+   Example 1.15.  rtp_relay:update usage
 ...
 ## update all sessions that are using rtpproxy
-$ opensips-cli -x mi rtp_relay_update rtpproxy
+$ opensips-cli -x mi rtp_relay:update rtpproxy
 ...
 
-1.7.3. rtp_relay_update_callid
+1.7.3. rtp_relay:update_callid
+
+   Replaces obsolete MI command: rtp_relay_update_callid.
 
    Updates/Re-engages the RTP relays in all ongoing RTP relay
    sessions.
 
    The function basically works in the same manner as
-   rtp_relay_update, but is to be used to update a specific
+   rtp_relay:update, but is to be used to update a specific
    callid. In addition, one can also update the engine and flags
    used for the particular session.
 
@@ -569,14 +588,14 @@ $ opensips-cli -x mi rtp_relay_update rtpproxy
        for the session. Only explicitely specified flags will be
        overwritten.
 
-   Example 1.16.  rtp_relay_update_callid usage
+   Example 1.16.  rtp_relay:update_callid usage
 ...
 ## update a call with a working RTPproxy node
-$ opensips-cli -x mi rtp_relay_update_callid 1-3758963@127.0.0.1 rtpprox
+$ opensips-cli -x mi rtp_relay:update_callid 1-3758963@127.0.0.1 rtpprox
 y
 
 ## update a call to use RTPEngine with a SRTP SDP for caller
-$ opensips-cli -x mi rtp_relay_update_callid callid=1-3758963@127.0.0.1
+$ opensips-cli -x mi rtp_relay:update_callid callid=1-3758963@127.0.0.1
 \
         flags='{ "caller":{"type":"SRTP", "flags":"replace-origin"},
                 "callee":{"type":"RTP", "flags"="replace-origin"}}'
@@ -587,14 +606,18 @@ $ opensips-cli -x mi rtp_relay_update_callid callid=1-3758963@127.0.0.1
 1.8.1. $rtp_relay
 
    Is used to provision the RTP back-end flags for the current
-   peer - if used in the initial INVITE REQUEST route, it
-   provisions the flags of the caller, whereas if used in the
-   initial INVITE BRANCH/REPLY route, it provisions the callee's
-   flags.
+   peer. This variable is scope-relative: in the main request
+   route of the initial INVITE it provisions the caller, while in
+   the branch route or replies of the initial INVITE transaction
+   it provisions the callee branch.
 
    For a sequential request, the variable represents the flags
    used for the UAC that generated the request. When used in a
    reply, the other UAC's flags are provisioned.
+
+   Use $rtp_relay_caller and $rtp_relay_callee when the script
+   needs to address the caller or callee side directly,
+   independent of the route scope.
 
    In an initial INVITE scope, the variable can be provisioned per
    branch, by using the variable's index.
@@ -624,7 +647,31 @@ $ opensips-cli -x mi rtp_relay_update_callid callid=1-3758963@127.0.0.1
    other UAC's flags, except the current one. All other fields are
    similar.
 
-1.8.3. $rtp_relay_ctx()
+1.8.3. $rtp_relay_caller
+
+   This variable has the same parameters as $rtp_relay, but always
+   provisions the caller side of the RTP relay session,
+   independent of the route where it is used.
+
+   In the main request route of the initial INVITE this is
+   equivalent to $rtp_relay. In a branch route or in replies of
+   the initial INVITE transaction this is equivalent to
+   $rtp_relay_peer. After the dialog is established, it addresses
+   the stored caller leg directly.
+
+1.8.4. $rtp_relay_callee
+
+   This variable has the same parameters as $rtp_relay, but always
+   provisions the callee side of the RTP relay session,
+   independent of the route where it is used.
+
+   In the main request route of the initial INVITE this is
+   equivalent to $rtp_relay_peer. In a branch route or in replies
+   of the initial INVITE transaction this is equivalent to
+   $rtp_relay. After the dialog is established, it addresses the
+   stored callee leg directly.
+
+1.8.5. $rtp_relay_ctx()
 
    This variable can be used to provide information about the RTP
    context, information that is not associated with any of the
@@ -650,13 +697,14 @@ Chapter 2. Contributors
 
    Table 2.1. Top contributors by DevScore^(1), authored
    commits^(2) and lines added/removed^(3)
-                   Name               DevScore Commits Lines ++ Lines --
-   1. Razvan Crainea (@razvancrainea)   183      104     7001     1207
-   2. Maksym Sobolyev (@sobomax)         6        4       10       11
-   3. Norman Brandinger (@NormB)         4        2       2        2
-   4. Vlad Patrascu (@rvlad-patrascu)    3        1       11       7
-   5. Liviu Chircu (@liviuchircu)        3        1       1        1
-   6. Vlad Paiu (@vladpaiu)              2        1       5        0
+     Name DevScore Commits Lines ++ Lines --
+   1. Razvan Crainea (@razvancrainea) 196 113 7198 1283
+   2. Maksym Sobolyev (@sobomax) 6 4 10 11
+   3. Norman Brandinger (@NormB) 4 2 2 2
+   4. Vlad Patrascu (@rvlad-patrascu) 3 1 11 7
+   5. Bogdan-Andrei Iancu (@bogdan-iancu) 3 1 1 1
+   6. Liviu Chircu (@liviuchircu) 3 1 1 1
+   7. Vlad Paiu (@vladpaiu) 2 1 5 0
 
    (1) DevScore = author_commits + author_lines_added /
    (project_lines_added / project_commits) + author_lines_deleted
@@ -666,7 +714,7 @@ Chapter 2. Contributors
    merge commits. Regarding imported patches/code, we do our best
    to count the work on behalf of the proper owner, as per the
    "fix_authors" and "mod_renames" arrays in
-   opensips/doc/build-contrib.sh. If you identify any
+   opensips/docs/build-contrib.sh. If you identify any
    patches/commits which do not get properly attributed to you,
    please submit a pull request which extends "fix_authors" and/or
    "mod_renames".
@@ -677,13 +725,14 @@ Chapter 2. Contributors
 2.2. By Commit Activity
 
    Table 2.2. Most recently active contributors^(1) to this module
-                   Name                 Commit Activity
-   1. Razvan Crainea (@razvancrainea) Apr 2021 - Oct 2025
-   2. Liviu Chircu (@liviuchircu)     Jun 2024 - Jun 2024
-   3. Norman Brandinger (@NormB)      Mar 2024 - Jun 2024
-   4. Maksym Sobolyev (@sobomax)      Feb 2023 - Nov 2023
-   5. Vlad Patrascu (@rvlad-patrascu) Mar 2023 - Mar 2023
-   6. Vlad Paiu (@vladpaiu)           Oct 2022 - Oct 2022
+                     Name                   Commit Activity
+   1. Razvan Crainea (@razvancrainea)     Apr 2021 - Jun 2026
+   2. Bogdan-Andrei Iancu (@bogdan-iancu) Apr 2026 - Apr 2026
+   3. Liviu Chircu (@liviuchircu)         Jun 2024 - Jun 2024
+   4. Norman Brandinger (@NormB)          Mar 2024 - Jun 2024
+   5. Maksym Sobolyev (@sobomax)          Feb 2023 - Nov 2023
+   6. Vlad Patrascu (@rvlad-patrascu)     Mar 2023 - Mar 2023
+   7. Vlad Paiu (@vladpaiu)               Oct 2022 - Oct 2022
 
    (1) including any documentation-related commits, excluding
    merge commits

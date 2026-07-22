@@ -28,12 +28,10 @@ proto_tls module
               1.5.11. tls_send_timeout (integer)
               1.5.12. tls_async (integer)
               1.5.13. tls_async_max_postponed_chunks (integer)
-              1.5.14. tls_async_local_connect_timeout (integer)
-              1.5.15. tls_async_handshake_timeout (integer)
 
         1.6. Exported MI Functions
 
-              1.6.1. tls_trace
+              1.6.1. tls:trace
 
    2. Frequently Asked Questions
    3. Contributors
@@ -67,8 +65,6 @@ proto_tls module
    1.11. Set tls_send_timeout variable
    1.12. Set tls_async variable
    1.13. Set tls_async_max_postponed_chunks parameter
-   1.14. Set tls_async_local_connect_timeout parameter
-   1.15. Set tls_async_handshake_timeout parameter
 
 Chapter 1. Admin Guide
 
@@ -333,7 +329,7 @@ modparam("proto_tls", "trace_destination", "hep_dest")
 
    This controls whether tracing for tls is on or not. You still
    need to define trace_destinationin order to work, but this
-   value will be controlled using mi function tls_trace.
+   value will be controlled using mi function tls:trace.
    Default value is 0(tracing inactive).
 
    Example 1.8. Set trace_on parameter
@@ -364,7 +360,7 @@ modparam("proto_tls", "trace_on", 1)
    $socket_in(port) (port) can be used.
 
    WARNING: IF trace_on is set to 0 or tracing is deactived via
-   the mi command tls_trace this route won't be called.
+   the mi command tls:trace this route won't be called.
    Default value is none(no route is set).
 
    Example 1.9. Set trace_filter_route parameter
@@ -450,41 +446,13 @@ modparam("proto_tls", "tls_async", 1) # enable async TLS
 modparam("proto_tls", "tls_async_max_postponed_chunks", 16)
 ...
 
-1.5.14. tls_async_local_connect_timeout (integer)
-
-   If tls_async is enabled, this specifies the number of
-   milliseconds that a connect will be tried in blocking mode
-   (optimization). If the connect operation lasts more than this,
-   the connect will go to async mode and will be passed to tls
-   MAIN for polling.
-
-   Default value is 100 ms.
-
-   Example 1.14. Set tls_async_local_connect_timeout parameter
-...
-modparam("proto_tls", "tls_async_local_connect_timeout", 200)
-...
-
-1.5.15. tls_async_handshake_timeout (integer)
-
-   If tls_async is enabled, this specifies the number of
-   milliseconds that a TLS handshake should be tried in blocking
-   mode (optimization). If the handshake operation lasts more than
-   this, the write will go to async mode and will be passed to tls
-   MAIN for polling.
-
-   Default value is 10 ms.
-
-   Example 1.15. Set tls_async_handshake_timeout parameter
-...
-modparam("proto_tls", "tls_async_handshake_timeout", 100)
-...
-
 1.6. Exported MI Functions
 
-1.6.1.  tls_trace
+1.6.1.  tls:trace
 
-   Name: tls_trace
+   Replaces obsolete MI command: tls_trace.
+
+   Name: tls:trace
 
    Parameters:
      * trace_mode(optional): set tls tracing on and off. This
@@ -495,7 +463,7 @@ modparam("proto_tls", "tls_async_handshake_timeout", 100)
           + off
 
    MI FIFO Command Format:
-                        opensips-cli -x mi tls_trace on
+                        opensips-cli -x mi tls:trace on
 
 Chapter 2. Frequently Asked Questions
 
@@ -581,8 +549,8 @@ Chapter 3. Contributors
    Table 3.1. Top contributors by DevScore^(1), authored
    commits^(2) and lines added/removed^(3)
      Name DevScore Commits Lines ++ Lines --
-   1. Bogdan-Andrei Iancu (@bogdan-iancu) 61 33 1558 826
-   2. Razvan Crainea (@razvancrainea) 54 34 921 706
+   1. Razvan Crainea (@razvancrainea) 78 53 1177 903
+   2. Bogdan-Andrei Iancu (@bogdan-iancu) 61 33 1558 826
    3. Eseanu Marius Cristian (@eseanucristian) 42 5 55 2133
    4. Ionut Ionita (@ionutrazvanionita) 35 14 1232 576
    5. Vlad Patrascu (@rvlad-patrascu) 20 14 186 213
@@ -604,7 +572,7 @@ Chapter 3. Contributors
    merge commits. Regarding imported patches/code, we do our best
    to count the work on behalf of the proper owner, as per the
    "fix_authors" and "mod_renames" arrays in
-   opensips/doc/build-contrib.sh. If you identify any
+   opensips/docs/build-contrib.sh. If you identify any
    patches/commits which do not get properly attributed to you,
    please submit a pull request which extends "fix_authors" and/or
    "mod_renames".
@@ -616,7 +584,7 @@ Chapter 3. Contributors
 
    Table 3.2. Most recently active contributors^(1) to this module
                       Name                   Commit Activity
-   1.  Razvan Crainea (@razvancrainea)     Feb 2015 - Jul 2025
+   1.  Razvan Crainea (@razvancrainea)     Feb 2015 - Jun 2026
    2.  Bogdan-Andrei Iancu (@bogdan-iancu) Feb 2015 - Jun 2025
    3.  jupiter                             Jun 2025 - Jun 2025
    4.  James Stanley                       Dec 2023 - Apr 2025
@@ -639,9 +607,9 @@ Chapter 4. Documentation
 
 4.1. Contributors
 
-   Last edited by: Vlad Patrascu (@rvlad-patrascu), Bogdan-Andrei
-   Iancu (@bogdan-iancu), Zero King (@l2dy), Razvan Crainea
-   (@razvancrainea), Liviu Chircu (@liviuchircu), Peter Lemenkov
+   Last edited by: Razvan Crainea (@razvancrainea), Vlad Patrascu
+   (@rvlad-patrascu), Bogdan-Andrei Iancu (@bogdan-iancu), Zero
+   King (@l2dy), Liviu Chircu (@liviuchircu), Peter Lemenkov
    (@lemenkov), Ionut Ionita (@ionutrazvanionita), Eseanu Marius
    Cristian (@eseanucristian), Vlad Paiu (@vladpaiu).
 

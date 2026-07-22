@@ -28,7 +28,7 @@ proto_wss Module
 
         1.4. Exported MI Functions
 
-              1.4.1. wss_trace
+              1.4.1. wss:trace
 
    2. Frequently Asked Questions
    3. Contributors
@@ -236,7 +236,7 @@ modparam("proto_wss", "trace_destination", "hep_dest")
 
    This controls whether tracing for wss is on or not. You still
    need to define trace_destinationin order to work, but this
-   value will be controlled using mi function wss_trace.
+   value will be controlled using mi function wss:trace.
    Default value is 0(tracing inactive).
 
    Example 1.8. Set trace_on parameter
@@ -267,7 +267,7 @@ modparam("proto_wss", "trace_on", 1)
    $socket_in(port) (port) can be used.
 
    WARNING: IF trace_on is set to 0 or tracing is deactived via
-   the mi command wss_trace this route won't be called.
+   the mi command wss:trace this route won't be called.
    Default value is none(no route is set).
 
    Example 1.9. Set trace_filter_route parameter
@@ -339,9 +339,11 @@ modparam("proto_wss", "require_origin", no)
 
 1.4. Exported MI Functions
 
-1.4.1.  wss_trace
+1.4.1.  wss:trace
 
-   Name: wss_trace
+   Replaces obsolete MI command: wss_trace.
+
+   Name: wss:trace
 
    Parameters:
      * trace_mode(optional): set wss tracing on and off. This
@@ -352,7 +354,7 @@ modparam("proto_wss", "require_origin", no)
           + off
 
    MI FIFO Command Format:
-                        opensips-cli -x mi wss_trace on
+                        opensips-cli -x mi wss:trace on
 
 Chapter 2. Frequently Asked Questions
 
@@ -369,15 +371,16 @@ Chapter 3. Contributors
    Table 3.1. Top contributors by DevScore^(1), authored
    commits^(2) and lines added/removed^(3)
      Name DevScore Commits Lines ++ Lines --
-   1. Razvan Crainea (@razvancrainea) 34 24 786 126
+   1. Razvan Crainea (@razvancrainea) 55 41 1185 217
    2. Bogdan-Andrei Iancu (@bogdan-iancu) 19 15 243 27
    3. Vlad Patrascu (@rvlad-patrascu) 17 13 131 113
    4. Ionut Ionita (@ionutrazvanionita) 15 10 362 19
-   5. Liviu Chircu (@liviuchircu) 10 8 48 59
+   5. Liviu Chircu (@liviuchircu) 11 9 50 59
    6. Maksym Sobolyev (@sobomax) 6 4 17 33
    7. Dan Pascu (@danpascu) 3 1 3 5
    8. Nick Altmann (@nikbyte) 3 1 2 2
    9. Peter Lemenkov (@lemenkov) 3 1 1 1
+   10. Stefan Darius 2 1 3 0
 
    (1) DevScore = author_commits + author_lines_added /
    (project_lines_added / project_commits) + author_lines_deleted
@@ -387,7 +390,7 @@ Chapter 3. Contributors
    merge commits. Regarding imported patches/code, we do our best
    to count the work on behalf of the proper owner, as per the
    "fix_authors" and "mod_renames" arrays in
-   opensips/doc/build-contrib.sh. If you identify any
+   opensips/docs/build-contrib.sh. If you identify any
    patches/commits which do not get properly attributed to you,
    please submit a pull request which extends "fix_authors" and/or
    "mod_renames".
@@ -398,16 +401,17 @@ Chapter 3. Contributors
 3.2. By Commit Activity
 
    Table 3.2. Most recently active contributors^(1) to this module
-                     Name                   Commit Activity
-   1. Razvan Crainea (@razvancrainea)     Jan 2016 - Jul 2025
-   2. Maksym Sobolyev (@sobomax)          Feb 2017 - Nov 2023
-   3. Bogdan-Andrei Iancu (@bogdan-iancu) Jan 2016 - May 2023
-   4. Liviu Chircu (@liviuchircu)         Mar 2016 - Apr 2022
-   5. Vlad Patrascu (@rvlad-patrascu)     May 2017 - Oct 2021
-   6. Nick Altmann (@nikbyte)             May 2021 - May 2021
-   7. Dan Pascu (@danpascu)               Jan 2020 - Jan 2020
-   8. Peter Lemenkov (@lemenkov)          Jun 2018 - Jun 2018
-   9. Ionut Ionita (@ionutrazvanionita)   Mar 2017 - Apr 2017
+                      Name                   Commit Activity
+   1.  Stefan Darius                       Jul 2026 - Jul 2026
+   2.  Razvan Crainea (@razvancrainea)     Jan 2016 - Jul 2026
+   3.  Liviu Chircu (@liviuchircu)         Mar 2016 - Feb 2026
+   4.  Maksym Sobolyev (@sobomax)          Feb 2017 - Nov 2023
+   5.  Bogdan-Andrei Iancu (@bogdan-iancu) Jan 2016 - May 2023
+   6.  Vlad Patrascu (@rvlad-patrascu)     May 2017 - Oct 2021
+   7.  Nick Altmann (@nikbyte)             May 2021 - May 2021
+   8.  Dan Pascu (@danpascu)               Jan 2020 - Jan 2020
+   9.  Peter Lemenkov (@lemenkov)          Jun 2018 - Jun 2018
+   10. Ionut Ionita (@ionutrazvanionita)   Mar 2017 - Apr 2017
 
    (1) including any documentation-related commits, excluding
    merge commits
@@ -416,8 +420,8 @@ Chapter 4. Documentation
 
 4.1. Contributors
 
-   Last edited by: Vlad Patrascu (@rvlad-patrascu), Razvan Crainea
-   (@razvancrainea), Bogdan-Andrei Iancu (@bogdan-iancu), Peter
+   Last edited by: Razvan Crainea (@razvancrainea), Vlad Patrascu
+   (@rvlad-patrascu), Bogdan-Andrei Iancu (@bogdan-iancu), Peter
    Lemenkov (@lemenkov), Liviu Chircu (@liviuchircu), Ionut Ionita
    (@ionutrazvanionita).
 

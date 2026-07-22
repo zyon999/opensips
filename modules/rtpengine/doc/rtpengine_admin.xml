@@ -480,6 +480,44 @@ rtpengine_offer();
 			possible tokens are described below.</para>
 			<para> When passing an option that &osips; is not aware of, it will be
 			blindly sent to the rtpengine daemon to be processed.</para>
+			<para>Values can also use <emphasis>bracket syntax</emphasis> to
+			pass structured data (lists and dictionaries) to the &rtp;
+			daemon. This enables features of the rtpengine ng protocol that
+			require nested parameters, such as
+			<emphasis>sdp-media-remove</emphasis>,
+			<emphasis>codec</emphasis>, and
+			<emphasis>sdp-attr</emphasis>.</para>
+			<para>A value enclosed in square brackets
+			(<quote>[...]</quote>) is parsed as a
+			<emphasis>list</emphasis> of space-separated items. If any
+			item at the top level inside the brackets contains an equals
+			sign (<quote>=</quote>), the entire value is parsed as a
+			<emphasis>dictionary</emphasis> of key=value pairs instead.
+			Brackets can be nested to build the multi-level structures
+			that certain rtpengine parameters expect.</para>
+			<para>The bracket syntax is parsed module-side and converted
+			to native bencode list and dictionary structures before being
+			sent to the &rtp; daemon. This works with all rtpengine daemon
+			versions and does not require any special daemon
+			configuration.</para>
+			<para>The legacy prefix-style codec flags
+			(<emphasis>transcode-CODEC</emphasis>,
+			<emphasis>codec-strip-CODEC</emphasis>,
+			<emphasis>codec-mask-CODEC</emphasis>) continue to work as
+			before and are sent as flag strings. Do not mix prefix-style
+			and bracket-style codec flags in the same call, as they are
+			processed independently and may produce unexpected
+			results.</para>
+			<para>Values inside brackets that need to contain literal
+			spaces or equals signs can use escape sequences:
+			<quote>..</quote> (double dot) is unescaped to a space
+			character, and <quote>--</quote> (double dash) is unescaped
+			to an equals sign. Single dots and single dashes are passed
+			through unchanged. This convention matches the rtpengine
+			daemon&apos;s own escape handling.</para>
+			<para>Nesting is limited to 8 levels of depth and individual
+			bracket values are limited to 4096 bytes. These limits are
+			sufficient for all documented rtpengine use cases.</para>
 			<itemizedlist>
 				<listitem><para>
 				<emphasis>via-branch=...</emphasis> - Include the <quote>branch</quote>
@@ -827,7 +865,7 @@ rtpengine_offer($var(rtpengine_flags));
 </programlisting>
                 </example>
 		<example>
-		<title><function>rtpengine_offer</function> usage for transcoding</title>
+		<title><function>rtpengine_offer</function> usage for transcoding (prefix style)</title>
 		<programlisting format="linespecific">
 ...
 # Goal: make A-side talk PCMA and B-side talk opus
@@ -835,6 +873,28 @@ rtpengine_offer($var(rtpengine_flags));
 # * do not use opus for A-side: codec-strip-opus
 # * offer opus to B-side: transcode-opus
 rtpengine_offer("... codec-mask-PCMA codec-strip-opus transcode-opus ...");
+...
+</programlisting>
+                </example>
+		<example>
+		<title><function>rtpengine_offer</function> usage with bracket syntax</title>
+		<programlisting format="linespecific">
+...
+# Remove video and message media streams from the SDP
+# (sdp-media-remove expects a list of media types)
+rtpengine_offer("sdp-media-remove=[video message image]");
+
+# Codec manipulation using bracket syntax
+# (codec expects a dictionary with sub-keys: transcode, strip, accept, etc.)
+rtpengine_offer("codec=[transcode=[PCMA PCMU] accept=[AMR-WB AMR] strip=[EVS]]");
+
+# Bracket syntax can be mixed with regular flags in the same call
+rtpengine_offer("trust-address replace-origin ICE=remove codec=[transcode=[PCMA]]");
+
+# SDP attribute manipulation with escape sequences
+# '..' becomes a space, '--' becomes an equals sign
+# This adds the SDP attribute "fmtp:96 useinbandfec=1" to audio streams
+rtpengine_offer("sdp-attr=[audio=[add=[fmtp:96..useinbandfec--1]]]");
 ...
 </programlisting>
                 </example>
@@ -1609,8 +1669,12 @@ if (is_method("BYE")) {
 
 	<section id="exported_mi_functions" xreflabel="Exported MI Functions">
 	<title>Exported MI Functions</title>
-		<section id="mi_rtpengine_enable" xreflabel="rtpengine_enable">
-			<title><function moreinfo="none">rtpengine_enable</function></title>
+		<section id="mi_enable" xreflabel="rtpengine:enable">
+			<title><function moreinfo="none">rtpengine:enable</function></title>
+		<para>
+		Replaces obsolete MI command: <emphasis>rtpengine_enable</emphasis>.
+		</para>
+
 			<para>
 			Enables/disables a &rtp; proxy.
 			</para>
@@ -1621,7 +1685,7 @@ if (is_method("BYE")) {
 					defined in the config file).
 				</para></listitem>
 				<listitem><para>
-					<emphasis>enable</emphasis> - 1 - enable, 0 - disable the &rtp; proxy, 2 - put the &rtp; node in probing mode.
+					<emphasis>rtpengine:enable</emphasis> - 1 - enable, 0 - disable the &rtp; proxy, 2 - put the &rtp; node in probing mode.
 				</para></listitem>
         <listitem><para>
 					<emphasis>setid</emphasis> (optional) the set ID of the nodes to be updated. If provided, only nodes in the provided set will be updated.
@@ -1633,20 +1697,24 @@ if (is_method("BYE")) {
 			</para>
 			<example>
 			<title>
-			<function moreinfo="none">rtpengine_enable</function> usage</title>
+			<function moreinfo="none">rtpengine:enable</function> usage</title>
 			<programlisting format="linespecific">
 ...
 ## disable all rtpengines by URL
-$ opensips-cli -x mi rtpengine_enable udp:192.168.2.133:8081 0
+$ opensips-cli -x mi rtpengine:enable udp:192.168.2.133:8081 0
 ## enable rtpengine by URL and set ID (3)
-$ opensips-cli -x mi rtpengine_enable url=udp:192.168.2.133:8081 enable=1 setid=3
+$ opensips-cli -x mi rtpengine:enable url=udp:192.168.2.133:8081 enable=1 setid=3
 ...
 			</programlisting>
 			</example>
 		</section>
 
-		<section id="mi_rtpengine_show" xreflabel="rtpengine_show">
-			<title><function moreinfo="none">rtpengine_show</function></title>
+		<section id="mi_show" xreflabel="rtpengine:show">
+			<title><function moreinfo="none">rtpengine:show</function></title>
+		<para>
+		Replaces obsolete MI command: <emphasis>rtpengine_show</emphasis>.
+		</para>
+
 			<para>
 			Displays all the &rtp; proxies and their information: set and
 			status (disabled or not, weight and recheck_ticks).
@@ -1656,17 +1724,21 @@ $ opensips-cli -x mi rtpengine_enable url=udp:192.168.2.133:8081 enable=1 setid=
 			</para>
 			<example>
 			<title>
-				<function moreinfo="none">rtpengine_show</function> usage</title>
+				<function moreinfo="none">rtpengine:show</function> usage</title>
 			<programlisting format="linespecific">
 ...
-$ opensips-cli -x mi rtpengine_show
+$ opensips-cli -x mi rtpengine:show
 ...
 			</programlisting>
 			</example>
 		</section>
 
-		<section id="mi_rtpengine_reload" xreflabel="rtpengine_reload">
-			<title><function moreinfo="none">rtpengine_reload</function></title>
+		<section id="mi_reload" xreflabel="rtpengine:reload">
+			<title><function moreinfo="none">rtpengine:reload</function></title>
+		<para>
+		Replaces obsolete MI command: <emphasis>rtpengine_reload</emphasis>.
+		</para>
+
 			<para>
 			Reloads all rtpengine sets from the database. Used only when the
 			<quote><xref linkend="param_db_url"/></quote> parameter is set.
@@ -1685,18 +1757,18 @@ $ opensips-cli -x mi rtpengine_show
 			</para>
 			<example>
 			<title>
-				<function moreinfo="none">rtpengine_reload</function> usage</title>
+				<function moreinfo="none">rtpengine:reload</function> usage</title>
 			<programlisting format="linespecific">
 ...
-$ opensips-cli -x mi rtpengine_reload
-$ opensips-cli -x mi rtpengine_reload type=soft
+$ opensips-cli -x mi rtpengine:reload
+$ opensips-cli -x mi rtpengine:reload type=soft
 ...
 			</programlisting>
 			</example>
 		</section>
 
-		<section id="mi_teardown" xreflabel="teardown">
-			<title><function moreinfo="none">teardown</function></title>
+		<section id="mi_teardown" xreflabel="rtpengine:teardown">
+			<title><function moreinfo="none">rtpengine:teardown</function></title>
 			<para>
 			Terminates the SIP dialog by the SIP Call-ID given as parameter.
 			</para>
@@ -1715,10 +1787,10 @@ $ opensips-cli -x mi rtpengine_reload type=soft
 			</para>
 			<example>
 			<title>
-				<function moreinfo="none">teardown</function> usage</title>
+				<function moreinfo="none">rtpengine:teardown</function> usage</title>
 			<programlisting format="linespecific">
 ...
-$ opensips-cli -x mi teardown Y2IwYjQ2YmE2ZDg5MWVkNDNkZGIwZjAzNGM1ZDY0ZDQ
+$ opensips-cli -x mi rtpengine:teardown Y2IwYjQ2YmE2ZDg5MWVkNDNkZGIwZjAzNGM1ZDY0ZDQ
 ...
 			</programlisting>
 			</example>

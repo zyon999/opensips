@@ -209,7 +209,6 @@ ABORT_ON_ASSERT	abort_on_assert
 LOGLEVEL	log_level
 LOGPREFIX	log_prefix
 LOGSTDOUT	log_stdout
-LOGSTDERROR	log_stderror
 STDERROR_ENABLED	stderror_enabled
 SYSLOG_ENABLED	    syslog_enabled
 LOG_EVENT_ENABLED	log_event_enabled
@@ -220,11 +219,8 @@ STDERROR_FORMAT stderror_log_format
 SYSLOG_FORMAT   syslog_log_format
 LOG_JSON_BUF_SIZE	"log_json_buf_size"
 LOG_MSG_BUF_SIZE    "log_msg_buf_size"
-LOGFACILITY	log_facility
 SYSLOG_FACILITY	syslog_facility
-LOGNAME		log_name
 SYSLOG_NAME	syslog_name
-LISTEN		listen
 SOCKET		socket
 MEMGROUP	mem-group
 ALIAS		alias
@@ -276,7 +272,7 @@ TCP_KEEPCOUNT           "tcp_keepcount"
 TCP_KEEPIDLE            "tcp_keepidle"
 TCP_KEEPINTERVAL        "tcp_keepinterval"
 TCP_MAX_MSG_TIME		"tcp_max_msg_time"
-TCP_PARALLEL_READ_ON_WORKERS "tcp_parallel_read_on_workers"
+TCP_THREADS             "tcp_threads"
 ADVERTISED_ADDRESS	"advertised_address"
 ADVERTISED_PORT		"advertised_port"
 MCAST_LOOPBACK		"mcast_loopback"
@@ -345,6 +341,10 @@ ANYCAST	("anycast"|"ANYCAST")
 ACCEPT_SUBDOMAIN ("accept_subdomain"|"ACCEPT_SUBDOMAIN")
 FRAG	("frag"|"FRAG")
 REUSE_PORT	("reuse_port"|"REUSE_PORT")
+ALLOW_PROXY_PROTOCOL	("allow"|"ALLOW")[-_]("proxy"|"PROXY")([-_]("protocol"|"PROTOCOL"))?
+SEND_PROXY_PROTOCOL	("send"|"SEND")[-_]("proxy"|"PROXY")([-_]("protocol"|"PROTOCOL"))?
+PROXY_PROTOCOL	("proxy"|"PROXY")([-_]("protocol"|"PROTOCOL"))?
+BOND	("bond"|"BOND")
 
 
 COM_LINE	#
@@ -432,7 +432,6 @@ SPACE		[ ]
 <INITIAL>{LOGLEVEL} { count(); yylval.strval=yytext; return LOGLEVEL; }
 <INITIAL>{LOGPREFIX} { count(); yylval.strval=yytext; return LOGPREFIX; }
 <INITIAL>{LOGSTDOUT}	{ yylval.strval=yytext; return LOGSTDOUT; }
-<INITIAL>{LOGSTDERROR} { yylval.strval=yytext; return LOGSTDERROR; }
 <INITIAL>{STDERROR_ENABLED}	{ yylval.strval=yytext; return STDERROR_ENABLED; }
 <INITIAL>{SYSLOG_ENABLED}	{ yylval.strval=yytext; return SYSLOG_ENABLED; }
 <INITIAL>{LOG_EVENT_ENABLED}	{ yylval.strval=yytext; return LOG_EVENT_ENABLED; }
@@ -445,11 +444,8 @@ SPACE		[ ]
 									return LOG_JSON_BUF_SIZE; }
 <INITIAL>{LOG_MSG_BUF_SIZE}    {	count(); yylval.strval=yytext;
 									return LOG_MSG_BUF_SIZE; }
-<INITIAL>{LOGFACILITY}	{ yylval.strval=yytext; return LOGFACILITY; }
 <INITIAL>{SYSLOG_FACILITY}	{ yylval.strval=yytext; return SYSLOG_FACILITY; }
-<INITIAL>{LOGNAME}	{ yylval.strval=yytext; return LOGNAME; }
 <INITIAL>{SYSLOG_NAME}	{ yylval.strval=yytext; return SYSLOG_NAME; }
-<INITIAL>{LISTEN}	{ count(); yylval.strval=yytext; return LISTEN; }
 <INITIAL>{SOCKET}	{ count(); yylval.strval=yytext; return SOCKET; }
 <INITIAL>{MEMGROUP}	{ count(); yylval.strval=yytext; return MEMGROUP; }
 <INITIAL>{ALIAS}	{ count(); yylval.strval=yytext; return ALIAS; }
@@ -512,7 +508,7 @@ SPACE		[ ]
 <INITIAL>{TCP_KEEPIDLE}        { count(); yylval.strval=yytext; return TCP_KEEPIDLE; }
 <INITIAL>{TCP_KEEPINTERVAL}    { count(); yylval.strval=yytext; return TCP_KEEPINTERVAL; }
 <INITIAL>{TCP_MAX_MSG_TIME}    { count(); yylval.strval=yytext; return TCP_MAX_MSG_TIME; }
-<INITIAL>{TCP_PARALLEL_READ_ON_WORKERS}  { count(); yylval.strval=yytext; return TCP_PARALLEL_READ_ON_WORKERS; }
+<INITIAL>{TCP_THREADS}  { count(); yylval.strval=yytext; return TCP_THREADS; }
 <INITIAL>{SERVER_SIGNATURE}	{ count(); yylval.strval=yytext; return SERVER_SIGNATURE; }
 <INITIAL>{SERVER_HEADER}	{ count(); yylval.strval=yytext; return SERVER_HEADER; }
 <INITIAL>{USER_AGENT_HEADER}	{ count(); yylval.strval=yytext; return USER_AGENT_HEADER; }
@@ -620,7 +616,11 @@ SPACE		[ ]
 <INITIAL>{ANYCAST}	{ count(); return ANYCAST; }
 <INITIAL>{ACCEPT_SUBDOMAIN}	{ count(); return ACCEPT_SUBDOMAIN; }
 <INITIAL>{REUSE_PORT}	{ count(); return REUSE_PORT; }
+<INITIAL>{ALLOW_PROXY_PROTOCOL}	{ count(); return ALLOW_PROXY_PROTOCOL; }
+<INITIAL>{SEND_PROXY_PROTOCOL}	{ count(); return SEND_PROXY_PROTOCOL; }
+<INITIAL>{PROXY_PROTOCOL}		{ count(); return PROXY_PROTOCOL; }
 <INITIAL>{FRAG}		{ count(); return FRAG; }
+<INITIAL>{BOND}		{ count(); return BOND; }
 <INITIAL>{SLASH}	{ count(); return SLASH; }
 <INITIAL>{SCALE_UP_TO}		{ count(); return SCALE_UP_TO; }
 <INITIAL>{SCALE_DOWN_TO}	{ count(); return SCALE_DOWN_TO; }

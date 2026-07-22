@@ -10,7 +10,9 @@ NAME=cachedb_mongodb.so
 include ../../lib/json/Makefile.json
 ifeq ($(CROSS_COMPILE),)
 MONGOC_BUILDER := $(shell \
-	if pkg-config --exists libmongoc-1.0; then \
+	if pkg-config --exists mongoc2; then \
+		echo 'pkg-config mongoc2'; \
+	elif pkg-config --exists libmongoc-1.0; then \
 		echo 'pkg-config libmongoc-1.0'; \
 	fi)
 endif
@@ -21,11 +23,9 @@ include ../../Makefile.openssl
 
 	DEFS += -I$(SYSBASE)/include/libmongoc-1.0 -I$(SYSBASE)/include/libbson-1.0
 	LIBS += -L$(LOCALBASE)/lib -lrt -lmongoc-1.0 -lbson-1.0
-	LIBS += -ldl -Bsymbolic
 else
 	DEFS += $(shell $(MONGOC_BUILDER) --cflags)
 	LIBS += $(shell $(MONGOC_BUILDER) --libs)
-	LIBS += -ldl -Bsymbolic
 endif
 
 include ../../Makefile.modules

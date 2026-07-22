@@ -36,6 +36,7 @@ extern str topo_hiding_seed;
 extern str topo_hiding_ct_encode_pw;
 extern str th_contact_encode_param;
 extern int th_ct_enc_scheme;
+extern int th_loop_protection;
 
 struct th_ct_params {
 	str param_name;
@@ -66,6 +67,8 @@ static int topo_no_dlg_encode_contact(struct sip_msg *req,int flags,str *routes,
 static int topo_no_dlg_seq_handling(struct sip_msg *msg,str *info);
 static int dlg_th_onreply(struct dlg_cell *dlg, struct sip_msg *rpl, struct sip_msg *req,
 		int init_req, int dir, int dst_leg);
+
+#define TH_FROM_TAG_SEP '|'
 
 /* exposed logic below */
 
@@ -381,6 +384,16 @@ static char * topo_ct_param_copy(char *buf, str *name, str *val, int should_quot
 			*buf++ = '"';
 	}
 	return buf;
+}
+
+static inline int topo_ct_short_len(int len, short *out, const char *field)
+{
+	if (len < 0 || len > SHRT_MAX) {
+		LM_ERR("%s too long for encoded contact (%d)\n", field, len);
+		return -1;
+	}
+	*out = (short)len;
+	return 0;
 }
 
 static int topo_dlg_replace_contact(struct sip_msg* msg, struct dlg_cell* dlg,
@@ -1378,6 +1391,8 @@ static int dlg_th_decode_callid(struct sip_msg *msg)
 	struct lump *del;
 	str new_callid;
 	int i,max_size;
+	char *q;
+	str enc_tag, *tag;
 
 	if (msg->callid == NULL) {
 		LM_ERR("Message with no callid\n");
@@ -1398,6 +1413,32 @@ static int dlg_th_decode_callid(struct sip_msg *msg)
 	for (i=0;i<new_callid.len;i++)
 		new_callid.s[i] ^= topo_hiding_seed.s[i%topo_hiding_seed.len];
 
+	if (th_loop_protection) {
+		/* locate the start of the from tag */
+		q = q_memchr(new_callid.s, TH_FROM_TAG_SEP, new_callid.len);
+		if (q) {
+			if (msg->first_line.type == SIP_REQUEST)
+				tag = &get_from(msg)->tag_value;
+			else
+				tag = &get_to(msg)->tag_value;
+			if (tag->len) {
+				enc_tag.s = q + 1;
+				enc_tag.len = new_callid.s + new_callid.len - enc_tag.s;
+				if (str_match(tag, &enc_tag)) {
+					LM_DBG("message from caller [%.*s] - skip decoding!\n",
+							new_callid.len, new_callid.s);
+					pkg_free(new_callid.s);
+					return 0;
+				}
+			}
+			/* fix the callid in the message */
+			new_callid.len = q - new_callid.s;
+		} else {
+			LM_WARN("From tag separator '%c' not found in decoded callid %.*s\n",
+					TH_FROM_TAG_SEP, new_callid.len, new_callid.s);
+		}
+	}
+
 	del=del_lump(msg, msg->callid->body.s-msg->buf, msg->callid->body.len, HDR_CALLID_T);
 	if (del==NULL) {
 		LM_ERR("Failed to delete old callid\n");
@@ -1414,36 +1455,74 @@ static int dlg_th_decode_callid(struct sip_msg *msg)
 	return 0;
 }
 
+
+char *th_get_encoded_callid(struct sip_msg *msg, str *tag, int *enc_len)
+{
+	int i,j,len,append_tag;
+	char *new_callid;
+	unsigned char *old_callid;
+
+	len = msg->callid->body.len;
+	append_tag = th_loop_protection && tag;
+	if (append_tag)
+		len += tag->len + 1;
+
+	old_callid = pkg_malloc(len);
+	if (!old_callid) {
+		LM_ERR("Failed to allocate old callid\n");
+		return NULL;
+	}
+
+	memcpy(old_callid, msg->callid->body.s, msg->callid->body.len);
+	for (j=0;j<msg->callid->body.len;j++)
+		old_callid[j] = msg->callid->body.s[j] ^ topo_hiding_seed.s[j%topo_hiding_seed.len];
+	if (append_tag) {
+		old_callid[msg->callid->body.len] =
+			TH_FROM_TAG_SEP ^ topo_hiding_seed.s[j++%topo_hiding_seed.len];
+		for (i = 0; i < tag->len; i++, j++)
+			old_callid[j] =
+				tag->s[i] ^ topo_hiding_seed.s[j%topo_hiding_seed.len];
+	}
+
+	*enc_len = calc_word64_encode_len(len) + topo_hiding_prefix.len;
+	new_callid = pkg_malloc(*enc_len);
+	if (new_callid==NULL) {
+		LM_ERR("Failed to allocate new callid\n");
+		pkg_free(old_callid);
+		return NULL;
+	}
+
+	memcpy(new_callid,topo_hiding_prefix.s,topo_hiding_prefix.len);
+
+	word64encode((unsigned char *)(new_callid+topo_hiding_prefix.len), old_callid, len);
+	pkg_free(old_callid);
+	return new_callid;
+}
+
 static int dlg_th_encode_callid(struct sip_msg *msg)
 {
 	struct lump *del;
 	str new_callid;
-	int i,word64_enc_len;
+	str *tag = NULL;
 
 	if (msg->callid == NULL) {
 		LM_ERR("Message with no callid\n");
 		return -1;
 	}
-
-	word64_enc_len = calc_word64_encode_len(msg->callid->body.len);
-	new_callid.len = word64_enc_len + topo_hiding_prefix.len;
-	new_callid.s = pkg_malloc(new_callid.len);
-	if (new_callid.s==NULL) {
-		LM_ERR("Failed to allocate new callid\n");
-		return -1;
+	if (th_loop_protection) {
+		if (msg->first_line.type == SIP_REQUEST)
+			tag = &get_from(msg)->tag_value;
+		else
+			tag = &get_to(msg)->tag_value;
+		if (!tag->len) /* there must be a tag */
+			return 0;
 	}
 
-	memcpy(new_callid.s,topo_hiding_prefix.s,topo_hiding_prefix.len);
-	for (i=0;i<msg->callid->body.len;i++)
-		msg->callid->body.s[i] ^= topo_hiding_seed.s[i%topo_hiding_seed.len];
-
-	word64encode((unsigned char *)(new_callid.s+topo_hiding_prefix.len),
-		     (unsigned char *)(msg->callid->body.s),msg->callid->body.len);
-
-	/* reset the callid back to original value - some might still need it ( eg. post script )
-	FIXME : use bigger buffer here ? mem vs cpu */
-	for (i=0;i<msg->callid->body.len;i++)
-		msg->callid->body.s[i] ^= topo_hiding_seed.s[i%topo_hiding_seed.len];
+	new_callid.s = th_get_encoded_callid(msg, tag, &new_callid.len);
+	if (!new_callid.s) {
+		LM_ERR("could not encode new callid\n");
+		return -1;
+	}
 
 	del=del_lump(msg, msg->callid->body.s-msg->buf, msg->callid->body.len, HDR_CALLID_T);
 	if (del==NULL) {
@@ -1681,15 +1760,16 @@ error:
 /* Via headers will be restored using the TM module, no need to save anything for them */
 static char* build_encoded_contact_suffix(struct sip_msg* msg, str *routes, int *suffix_len, int flags)
 {
-	short rr_len,ct_len,addr_len,flags_len,enc_len;
+	short rr_len,ct_len,addr_len,flags_len;
 	char *suffix_plain,*suffix_enc,*p,*s;
 	str rr_set = {NULL, 0};
 	str contact;
 	str flags_str;
-	int i,total_len;
+	int i,total_len,enc_len;
 	struct sip_uri ctu;
 	struct th_ct_params* el;
 	param_t *it;
+	int free_rr_set = 0;
 	int is_req = (msg->first_line.type==SIP_REQUEST)?1:0;
 	int local_len = sizeof(short) /* RR length */ +
 			sizeof(short) /* Contact length */ +
@@ -1705,13 +1785,16 @@ static char* build_encoded_contact_suffix(struct sip_msg* msg, str *routes, int 
 
 	if (routes && routes->len) {
 		rr_set = *routes;
-		rr_len = (short)routes->len;
+		if (topo_ct_short_len(routes->len, &rr_len, "route set") < 0)
+			return NULL;
 	} else if(msg->record_route){
 		if(print_rr_body(msg->record_route, &rr_set, !is_req, 0, NULL) != 0){
 			LM_ERR("failed to print route records \n");
 			return NULL;
 		}
-		rr_len = (short)rr_set.len;
+		free_rr_set = 1;
+		if (topo_ct_short_len(rr_set.len, &rr_len, "route set") < 0)
+			goto error;
 	} else {
 		rr_len = 0;
 	}
@@ -1723,13 +1806,17 @@ static char* build_encoded_contact_suffix(struct sip_msg* msg, str *routes, int 
 		goto error;
 	} else {
 		contact = ((contact_body_t *)msg->contact->parsed)->contacts->uri;
-		ct_len = (short)contact.len;
+		if (topo_ct_short_len(contact.len, &ct_len, "contact") < 0)
+			goto error;
 	}
 
 	flags_str.s = int2str(flags, &flags_str.len);
-	flags_len = (short)flags_str.len;
+	if (topo_ct_short_len(flags_str.len, &flags_len, "flags") < 0)
+		goto error;
 	
-	addr_len = (short)msg->rcv.bind_address->sock_str.len;
+	if (topo_ct_short_len(msg->rcv.bind_address->sock_str.len,
+			&addr_len, "bind address") < 0)
+		goto error;
 	local_len += rr_len + ct_len + flags_len + addr_len; 
 	enc_len = th_ct_enc_scheme == ENC_BASE64 ?
 		calc_word64_encode_len(local_len) : calc_word32_encode_len(local_len);
@@ -1846,13 +1933,13 @@ static char* build_encoded_contact_suffix(struct sip_msg* msg, str *routes, int 
 		}
 	}
 
-	if (rr_set.s && !routes)
+	if (rr_set.s && free_rr_set)
 		pkg_free(rr_set.s);
 	pkg_free(suffix_plain);
 	*suffix_len = total_len;
 	return suffix_enc;
 error:
-	if (rr_set.s)
+	if (rr_set.s && free_rr_set)
 		pkg_free(rr_set.s);
 	return NULL;
 }

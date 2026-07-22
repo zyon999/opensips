@@ -24,8 +24,8 @@
 #include "cgrates_acc.h"
 
 #define CGR_REF_DBG(_c, _s) LM_DBG("%s ref=%d ctx=%p\n", _s, _c->ref_no, _c)
-#define CGR_SESS_ON(_s) ((_s) && (_s)->branch_mask)
-#define CGR_SESS_ON_BRANCH(_s, _b) ((_s) && (_s)->branch_mask & (1 << (_b)))
+#define CGR_SESS_ON(_s) ((_s) && !BRANCH_BM_NONE_SET((_s)->branch_mask) )
+#define CGR_SESS_ON_BRANCH(_s, _b) ((_s) && BRANCH_BM_TST_IDX((_s)->branch_mask,(_b)))
 
 struct dlg_binds cgr_dlgb;
 struct tm_binds cgr_tmb;
@@ -37,6 +37,8 @@ static inline void cgr_free_acc_ctx(struct cgr_acc_ctx *ctx);
 static void cgr_tmcb_func( struct cell* t, int type, struct tmcb_params *ps);
 static void cgr_tmcb_func_free(void *param);
 static void cgr_dlg_callback(struct dlg_cell *dlg, int type,
+		struct dlg_cb_params *_params);
+static void cgr_dlg_process_vars(struct dlg_cell *dlg, int type,
 		struct dlg_cb_params *_params);
 
 static str cgr_ctx_str = str_init("cgrX_ctx");
@@ -58,6 +60,30 @@ int cgr_acc_init(void)
 	INIT_LIST_HEAD(cgrates_contexts);
 
 	return 0;
+}
+
+static int cgr_restore_acc_ctx(struct dlg_cell *dlg, struct cgr_acc_ctx *ctx)
+{
+	int_str ctxstr;
+	int_str new_ctxstr;
+	int val_type;
+	struct cgr_acc_ctx *stored_ctx = NULL;
+
+	if (cgr_dlgb.fetch_dlg_value(dlg, &cgr_ctx_str, &val_type,
+				&ctxstr, 0) == 0 &&
+			val_type == DLG_VAL_TYPE_STR &&
+			ctxstr.s.len == sizeof(struct cgr_acc_ctx *)) {
+		stored_ctx = *(struct cgr_acc_ctx **)ctxstr.s.s;
+		if (stored_ctx == ctx)
+			return 0;
+	}
+
+	LM_DBG("resetting dialog acc ctx from %p to %p\n", stored_ctx, ctx);
+	new_ctxstr.s.len = sizeof(ctx);
+	new_ctxstr.s.s = (char *)&ctx;
+
+	return cgr_dlgb.store_dlg_value(dlg, &cgr_ctx_str, &new_ctxstr,
+			DLG_VAL_TYPE_STR);
 }
 
 static inline struct cgr_acc_ctx *cgr_new_acc_ctx(struct dlg_cell *dlg)
@@ -882,7 +908,7 @@ int w_cgr_acc(struct sip_msg* msg, void *flag_c, str* acc_c, str *dst_c,
 	struct cgr_acc_ctx *ctx;
 	struct cgr_session *s;
 	struct dlg_cell *dlg;
-	branch_bm_t branch_mask = 0;
+	int branch_idx;
 
 	if (msg->REQ_METHOD != METHOD_INVITE) {
 		LM_DBG("accounting not called on INVITE\n");
@@ -890,11 +916,11 @@ int w_cgr_acc(struct sip_msg* msg, void *flag_c, str* acc_c, str *dst_c,
 	}
 	/* find out where we are to see if it makes sense to engage anything */
 	if (route_type == REQUEST_ROUTE || route_type == FAILURE_ROUTE) {
-		branch_mask = (unsigned)-1;
+		branch_idx = -1;
 		LM_DBG("engaging accounting for all branches!\n");
 	} else if (route_type == BRANCH_ROUTE || route_type == ONREPLY_ROUTE) {
-		branch_mask = 1 << cgr_tmb.get_branch_index();
-		LM_DBG("engaging accounting for branch %d!\n", cgr_tmb.get_branch_index());
+		branch_idx = cgr_tmb.get_branch_index();
+		LM_DBG("engaging accounting for branch %d!\n", branch_idx);
 	} else {
 		LM_ERR("cannot engage accounting in route type %d\n", route_type);
 		return -3;
@@ -947,15 +973,14 @@ int w_cgr_acc(struct sip_msg* msg, void *flag_c, str* acc_c, str *dst_c,
 		LM_DBG("session already engaged! nothing updated...\n");
 		si = s->acc_info;
 	}
-	if (si->branch_mask & branch_mask) {
-		LM_DBG("session already engaged on this branch\n");
-		/* nothing more to do - no ref, no nothing */
-		return 1;
-	}
-	si->branch_mask |= branch_mask;
-	LM_DBG("session info tag=%.*s acc=%.*s dst=%.*s mask=%X\n",
+
+	if (branch_idx==-1)
+		BRANCH_BM_SET_ALL( si->branch_mask );
+	else
+		BRANCH_BM_SET_IDX( si->branch_mask , branch_idx );
+	LM_DBG("session info tag=%.*s acc=%.*s dst=%.*s mask="BRANCH_BM_SPECS"\n",
 			s->tag.len, s->tag.s, si->acc.len, si->acc.s,
-			si->dst.len, si->dst.s, si->branch_mask);
+			si->dst.len, si->dst.s, BRANCH_BM_ARGS(si->branch_mask) );
 
 	if (!ctx->engaged) {
 		time(&ctx->start_time);
@@ -977,6 +1002,12 @@ int w_cgr_acc(struct sip_msg* msg, void *flag_c, str* acc_c, str *dst_c,
 		if (cgr_dlgb.register_dlgcb(dlg, DLGCB_WRITE_VP,
 					cgr_dlg_onwrite, ctx, NULL) != 0) {
 			LM_ERR("cannot register callback for context serialization!\n");
+			return -1;
+		}
+
+		if (cgr_dlgb.register_dlgcb(dlg, DLGCB_PROCESS_VARS,
+					cgr_dlg_process_vars, ctx, NULL) != 0) {
+			LM_ERR("cannot register callback for context replication!\n");
 			return -1;
 		}
 
@@ -1032,17 +1063,17 @@ static void cgr_tmcb_func(struct cell* t, int type, struct tmcb_params *ps)
 			if (CGR_SESS_ON_BRANCH(si, branch)) {
 				if ((si->flags & CGRF_DO_MISSED) && (si->flags & CGRF_DO_CDR))
 					cgr_cdr(ps->req, ctx, s, &callid);
-				si->branch_mask = 0;
+				BRANCH_BM_RST_ALL( si->branch_mask );
 			}
 		}
-		goto unref;
+		return;
 	}
 
 	/* we start a session only for successful calls */
 	dlg = cgr_dlgb.get_dlg();
 	if (!dlg) {
 		LM_ERR("cannot find dialog!\n");
-		goto unref;
+		return;
 	}
 	time(&ctx->answer_time);
 	list_for_each(l, ctx->sessions) {
@@ -1067,17 +1098,15 @@ static void cgr_tmcb_func(struct cell* t, int type, struct tmcb_params *ps)
 		si->flags |= CGRF_ENGAGED;
 	}
 
-	/* should have reffed engaged and unref tm, so we simply exit :D */
+	/* the tm ref is released by the callback release hook */
 	return;
 error:
 	/* TODO: should we close all the started sessions now? */
 	terminate_str.s = "CGRateS Accounting Denied";
 	terminate_str.len = strlen(terminate_str.s);
-	if (cgr_dlgb.terminate_dlg(NULL, dlg->h_entry, dlg->h_id, &terminate_str) >= 0)
+	if (run_dlg_api(&cgr_dlgb, terminate_dlg, NULL, dlg->h_entry, dlg->h_id, &terminate_str) >= 0)
 		return;
 	LM_ERR("cannot terminate the dialog!\n");
-unref:
-	cgr_ref_acc_ctx(ctx, -1, "tm");
 }
 
 static void cgr_cdr_cb(struct cell* t, int type, struct tmcb_params *ps)
@@ -1101,6 +1130,8 @@ static void cgr_cdr_cb(struct cell* t, int type, struct tmcb_params *ps)
 			continue;
 		cgr_cdr(ps->req, ctx, s, &dlg->callid);
 	}
+	if (cgr_restore_acc_ctx(dlg, NULL) < 0)
+		LM_ERR("cannot reset context %p in dialog %p\n", ctx, dlg);
 	cgr_ref_acc_ctx(ctx, -1, "engaged");
 }
 
@@ -1304,6 +1335,12 @@ store:
 		goto internal_error;
 	}
 
+	if (cgr_dlgb.register_dlgcb(dlg, DLGCB_PROCESS_VARS,
+				cgr_dlg_process_vars, ctx, NULL) != 0) {
+		LM_ERR("cannot register callback for context replication!\n");
+		goto internal_error;
+	}
+
 	if (cgr_dlgb.register_dlgcb(dlg, DLGCB_DESTROY,
 				cgr_dlg_destroy, NULL, NULL) != 0)
 		LM_ERR("cannot register callback for context release! context might leak!\n");
@@ -1314,6 +1351,28 @@ internal_error:
 	cgr_free_acc_ctx(ctx);
 }
 #undef CGR_CTX_COPY
+
+static void cgr_dlg_process_vars(struct dlg_cell *dlg, int type,
+		struct dlg_cb_params *_params)
+{
+	struct cgr_acc_ctx *ctx;
+	str *name;
+
+	if (!_params || !_params->param || !*_params->param) {
+		LM_ERR("no context specified to process replicated vars\n");
+		return;
+	}
+
+	ctx = *_params->param;
+	name = (str *)_params->dlg_data;
+
+	if (name && (name->len != cgr_ctx_str.len ||
+				memcmp(name->s, cgr_ctx_str.s, name->len) != 0))
+		return;
+
+	if (cgr_restore_acc_ctx(dlg, ctx) < 0)
+		LM_ERR("cannot restore context %p in dialog %p\n", ctx, dlg);
+}
 
 static void cgr_dlg_callback(struct dlg_cell *dlg, int type,
 		struct dlg_cb_params *_params)
@@ -1371,8 +1430,11 @@ static void cgr_dlg_callback(struct dlg_cell *dlg, int type,
 			}
 		}
 	}
-	if (!registered)
+	if (!registered) {
+		if (cgr_restore_acc_ctx(dlg, NULL) < 0)
+			LM_ERR("cannot reset context %p in dialog %p\n", ctx, dlg);
 		cgr_ref_acc_ctx(ctx, -1, "dialog");
+	}
 }
 
 int cgr_acc_terminate(json_object *param, json_object **ret)
@@ -1426,7 +1488,7 @@ int cgr_acc_terminate(json_object *param, json_object **ret)
 		terminate_str.s = terminate_str_pre.s;
 		terminate_str.len = terminate_str_pre.len - 2 /* skip the ': ' */;
 	}
-	if (cgr_dlgb.terminate_dlg(NULL, h_entry, h_id, &terminate_str) < 0) {
+	if (run_dlg_api(&cgr_dlgb, terminate_dlg, NULL, h_entry, h_id, &terminate_str) < 0) {
 		if (terminate_str.s != terminate_str_pre.s)
 			pkg_free(terminate_str.s);
 		err = "cannot terminate dialog";

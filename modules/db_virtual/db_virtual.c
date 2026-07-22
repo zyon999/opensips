@@ -103,15 +103,15 @@ static const param_export_t params[] = {
  * MI
  */
 static const mi_export_t mi_cmds[] = {
-    {"db_get", 0, 0, 0, {
-        {db_get_info, {0}},
-        {EMPTY_MI_RECIPE}}
+    {"get", 0, 0, 0, {
+    	{db_get_info, {0}},
+        {EMPTY_MI_RECIPE}}, {"db_get", 0}
     },
-    {"db_set", 0, 0, 0, {
-        {db_set_info_1,   {"set_index", "db_url_index", "may_use_db_flag", 0}},
+    {"set", 0, 0, 0, {
+    	{db_set_info_1,   {"set_index", "db_url_index", "may_use_db_flag", 0}},
         {db_set_info_2,   {"set_index", "db_url_index", "may_use_db_flag",
                            "ingore_retries", 0}},
-        {EMPTY_MI_RECIPE}}
+        {EMPTY_MI_RECIPE}}, {"db_set", 0}
     },
     {EMPTY_MI_EXPORT}
 };

@@ -1055,10 +1055,10 @@ Chapter 3. Contributors
    Table 3.1. Top contributors by DevScore^(1), authored
    commits^(2) and lines added/removed^(3)
      Name DevScore Commits Lines ++ Lines --
-   1. Bogdan-Andrei Iancu (@bogdan-iancu) 228 114 4306 4609
-   2. Jan Janak (@janakj) 147 16 5587 5074
-   3. Ionut Ionita (@ionutrazvanionita) 140 39 3730 4180
-   4. Razvan Crainea (@razvancrainea) 102 67 2705 677
+   1. Bogdan-Andrei Iancu (@bogdan-iancu) 239 116 5387 4613
+   2. Jan Janak (@janakj) 148 16 5587 5074
+   3. Ionut Ionita (@ionutrazvanionita) 141 39 3730 4180
+   4. Razvan Crainea (@razvancrainea) 103 68 2706 678
    5. Liviu Chircu (@liviuchircu) 75 55 985 608
    6. Jiri Kuthan (@jiriatipteldotorg) 57 26 2272 660
    7. Daniel-Constantin Mierla (@miconda) 26 23 115 88
@@ -1074,7 +1074,8 @@ Chapter 3. Contributors
    Sergio Gutierrez, Peter Nixon, Alex Massover, Nils Ohlmeier,
    Konstantin Bokarius, Alexey Vasilyev (@vasilevalex), Jesus
    Rodrigues, Julien Blache, Julián Moreno Patiño, Peter Lemenkov
-   (@lemenkov), Dusan Klinec (@ph4r05), Edson Gellert Schubert.
+   (@lemenkov), Stefan Darius, Dusan Klinec (@ph4r05), Edson
+   Gellert Schubert.
 
    (1) DevScore = author_commits + author_lines_added /
    (project_lines_added / project_commits) + author_lines_deleted
@@ -1084,7 +1085,7 @@ Chapter 3. Contributors
    merge commits. Regarding imported patches/code, we do our best
    to count the work on behalf of the proper owner, as per the
    "fix_authors" and "mod_renames" arrays in
-   opensips/doc/build-contrib.sh. If you identify any
+   opensips/docs/build-contrib.sh. If you identify any
    patches/commits which do not get properly attributed to you,
    please submit a pull request which extends "fix_authors" and/or
    "mod_renames".
@@ -1096,27 +1097,28 @@ Chapter 3. Contributors
 
    Table 3.2. Most recently active contributors^(1) to this module
                       Name                   Commit Activity
-   1.  Razvan Crainea (@razvancrainea)     Aug 2010 - Dec 2024
-   2.  Alexandra Titoc                     Sep 2024 - Sep 2024
-   3.  Liviu Chircu (@liviuchircu)         Jan 2013 - May 2024
-   4.  Maksym Sobolyev (@sobomax)          Dec 2003 - Nov 2023
-   5.  Bogdan-Andrei Iancu (@bogdan-iancu) Dec 2003 - May 2023
-   6.  Vlad Patrascu (@rvlad-patrascu)     May 2017 - Mar 2023
-   7.  Alexey Vasilyev (@vasilevalex)      Mar 2022 - Mar 2022
-   8.  Walter Doekes (@wdoekes)            Apr 2021 - Apr 2021
-   9.  Dan Pascu (@danpascu)               Jul 2004 - Sep 2018
-   10. Peter Lemenkov (@lemenkov)          Jun 2018 - Jun 2018
+   1.  Stefan Darius                       Jul 2026 - Jul 2026
+   2.  Bogdan-Andrei Iancu (@bogdan-iancu) Dec 2003 - Jul 2026
+   3.  Razvan Crainea (@razvancrainea)     Aug 2010 - Jun 2026
+   4.  Alexandra Titoc                     Sep 2024 - Sep 2024
+   5.  Liviu Chircu (@liviuchircu)         Jan 2013 - May 2024
+   6.  Maksym Sobolyev (@sobomax)          Dec 2003 - Nov 2023
+   7.  Vlad Patrascu (@rvlad-patrascu)     May 2017 - Mar 2023
+   8.  Alexey Vasilyev (@vasilevalex)      Mar 2022 - Mar 2022
+   9.  Walter Doekes (@wdoekes)            Apr 2021 - Apr 2021
+   10. Dan Pascu (@danpascu)               Jul 2004 - Sep 2018
 
-   All remaining contributors: Ionut Ionita (@ionutrazvanionita),
-   Julián Moreno Patiño, Dusan Klinec (@ph4r05), Vlad Paiu
-   (@vladpaiu), Ryan Bullock (@rrb3942), Irina-Maria Stanescu,
-   Alex Massover, Sergio Gutierrez, Ovidiu Sas (@ovidiusas),
-   Henning Westerholt (@henningw), Daniel-Constantin Mierla
-   (@miconda), Konstantin Bokarius, Edson Gellert Schubert,
-   Elena-Ramona Modroiu, Jesus Rodrigues, Julien Blache, Peter
-   Nixon, Juha Heinanen (@juha-h), Jan Janak (@janakj), Jiri
-   Kuthan (@jiriatipteldotorg), Andrei Pelinescu-Onciul,
-   Elena-Ramona Modroiu, Nils Ohlmeier, Karel Kozlik.
+   All remaining contributors: Peter Lemenkov (@lemenkov), Ionut
+   Ionita (@ionutrazvanionita), Julián Moreno Patiño, Dusan Klinec
+   (@ph4r05), Vlad Paiu (@vladpaiu), Ryan Bullock (@rrb3942),
+   Irina-Maria Stanescu, Alex Massover, Sergio Gutierrez, Ovidiu
+   Sas (@ovidiusas), Henning Westerholt (@henningw),
+   Daniel-Constantin Mierla (@miconda), Konstantin Bokarius, Edson
+   Gellert Schubert, Elena-Ramona Modroiu, Jesus Rodrigues, Julien
+   Blache, Peter Nixon, Juha Heinanen (@juha-h), Jan Janak
+   (@janakj), Jiri Kuthan (@jiriatipteldotorg), Andrei
+   Pelinescu-Onciul, Elena-Ramona Modroiu, Nils Ohlmeier, Karel
+   Kozlik.
 
    (1) including any documentation-related commits, excluding
    merge commits
@@ -1125,8 +1127,8 @@ Chapter 4. Documentation
 
 4.1. Contributors
 
-   Last edited by: Liviu Chircu (@liviuchircu), Razvan Crainea
-   (@razvancrainea), Bogdan-Andrei Iancu (@bogdan-iancu), Vlad
+   Last edited by: Razvan Crainea (@razvancrainea), Liviu Chircu
+   (@liviuchircu), Bogdan-Andrei Iancu (@bogdan-iancu), Vlad
    Patrascu (@rvlad-patrascu), Peter Lemenkov (@lemenkov), Ionut
    Ionita (@ionutrazvanionita), Ryan Bullock (@rrb3942),
    Irina-Maria Stanescu, Sergio Gutierrez, Henning Westerholt

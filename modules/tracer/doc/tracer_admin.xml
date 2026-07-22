@@ -32,12 +32,12 @@
 	The tracing tracing can be turned on/off using fifo command.
 	</para>
 	<para>
-	opensips-cli -x mi trace on
-	opensips-cli -x mi trace [some_trace_id] on
+	opensips-cli -x mi tracer:trace on
+	opensips-cli -x mi tracer:trace [some_trace_id] on
 	</para>
 	<para>
-	opensips-cli -x mi trace off
-	opensips-cli -x mi trace [some_trace_id] off
+	opensips-cli -x mi tracer:trace off
+	opensips-cli -x mi tracer:trace [some_trace_id] off
 	</para>
 
 	<para>
@@ -462,9 +462,9 @@ modparam("tracer", "file_mode", 0644)
 
    <section id="exported_mi_functions" xreflabel="Exported MI Functions">
 	<title>Exported MI Functions</title>
-	<section id="mi_trace" xreflabel="trace">
+	<section id="mi_trace" xreflabel="tracer:trace">
 		<title>
-		<function moreinfo="none">trace</function>
+		<function moreinfo="none">tracer:trace</function>
 		</title>
 		<para>
 			Enable/disable tracing(globally or for a specific trace id) or dump
@@ -472,7 +472,7 @@ modparam("tracer", "file_mode", 0644)
 			(each parameter is ginven in the format param_name=param_value).
 		</para>
 		<para>
-			Name: <emphasis>trace</emphasis>
+			Name: <emphasis>tracer:trace</emphasis>
 		</para>
 		<para>
 			Parameters:
@@ -516,18 +516,22 @@ modparam("tracer", "file_mode", 0644)
 		</para>
 		<programlisting  format="linespecific">
 # Display global tracing mode and all trace destinations:
-opensips-cli -x mi trace
+opensips-cli -x mi tracer:trace
 # Turn off global tracing:
-opensips-cli -x mi trace mode=off
+opensips-cli -x mi tracer:trace mode=off
 # Turn on tracing for destination id tid2:
-opensips-cli -x mi trace id=tid2 mode=on
+opensips-cli -x mi tracer:trace id=tid2 mode=on
 		</programlisting>
 	</section>
 
-	<section id="mi_trace_start" xreflabel="trace">
+	<section id="mi_start" xreflabel="tracer:start">
 		<title>
-		<function moreinfo="none">trace_start</function>
+		<function moreinfo="none">tracer:start</function>
 		</title>
+		<para>
+		Replaces obsolete MI command: <emphasis>trace_start</emphasis>.
+		</para>
+
 		<para>
 			Creates a dynamic tracing destination based using custom filters.
 			This function can be used to debug calls for certain destinations
@@ -537,7 +541,7 @@ opensips-cli -x mi trace id=tid2 mode=on
 			Dynamic destinations are not restart persistent!
 		</para>
 		<para>
-			Name: <emphasis>trace_start</emphasis>
+			Name: <emphasis>tracer:start</emphasis>
 		</para>
 		<para>
 			Parameters:
@@ -598,27 +602,31 @@ opensips-cli -x mi trace id=tid2 mode=on
 		MI FIFO Command to start tracing calls from IP 127.0.0.1 to HEP destination 10.0.0.1:9060:
 		</para>
 		<programlisting  format="linespecific">
-		opensips-cli -x mi trace_start id=ip_filter uri=hep:10.0.0.1:9060 filter=ip=127.0.0.1
+		opensips-cli -x mi tracer:start id=ip_filter uri=hep:10.0.0.1:9060 filter=ip=127.0.0.1
 		</programlisting>
 
 		<para>
 		MI FIFO Command to start tracing calls from user Alice to user Bob:
 		</para>
 		<programlisting  format="linespecific">
-		opensips-cli -x mi trace_start id=alice_bob uri=hep:10.0.0.1:9060 filter=caller=Alice filter=caller=Bob
+		opensips-cli -x mi tracer:start id=alice_bob uri=hep:10.0.0.1:9060 filter=caller=Alice filter=caller=Bob
 		</programlisting>
 	</section>
 
-	<section id="mi_trace_stop" xreflabel="trace">
+	<section id="mi_stop" xreflabel="tracer:stop">
 		<title>
-		<function moreinfo="none">trace_stop</function>
+		<function moreinfo="none">tracer:stop</function>
 		</title>
+		<para>
+		Replaces obsolete MI command: <emphasis>trace_stop</emphasis>.
+		</para>
+
 		<para>
 			Stops &osips; from sending traffic to a dynamic trace id created
 			using the <emphasis>trace_start</emphasis> command.
 		</para>
 		<para>
-			Name: <emphasis>trace_stop</emphasis>
+			Name: <emphasis>tracer:stop</emphasis>
 		</para>
 		<para>
 			Parameters:
@@ -635,7 +643,7 @@ opensips-cli -x mi trace id=tid2 mode=on
 		MI FIFO Command to stop tracing calls from user Alice to user Bob:
 		</para>
 		<programlisting  format="linespecific">
-		opensips-cli -x mi trace_stop alice_bob
+		opensips-cli -x mi tracer:stop alice_bob
 		</programlisting>
 	</section>
 
@@ -668,4 +676,3 @@ opensips-cli -x mi trace id=tid2 mode=on
 	</section>
 
 </chapter>
-

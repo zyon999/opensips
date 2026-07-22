@@ -26,6 +26,8 @@
 #ifndef _WS_HANDSHAKE_H_
 #define _WS_HANDSHAKE_H_
 
+#include <pthread.h>
+
 #include "../../ip_addr.h"
 
 #define HTTP_SEP			"\r\n"
@@ -119,12 +121,11 @@ static int complete_ws_trace( struct tcp_connection* conn, trans_trace_status st
 #define WS_TRACE_MAX 1024
 static char ws_trace_buf[WS_TRACE_MAX];
 
+static pthread_mutex_t ws_http_parse_lock = PTHREAD_MUTEX_INITIALIZER;
+
 /* safety checks */
 #ifndef _ws_common_module
 #error "_ws_common_module not defined!"
-#endif
-#ifndef _ws_common_tcp_current_req
-#error "_ws_common_tcp_current_req not defined!"
 #endif
 #ifndef _ws_common_max_msg_chunks
 #error "_ws_common_max_msg_chunks not defined!"
@@ -214,12 +215,14 @@ static inline int ws_client_handshake(struct tcp_connection *con)
 	}
 
 	/* there should be no req in the con */
-	if (con->con_req) {
+	if (con->proto_req) {
 		LM_BUG("there should not be any con req!\n");
 		goto error;
 	}
-	init_tcp_req(&_ws_common_tcp_current_req, 0);
-	req=&_ws_common_tcp_current_req;
+	req = tcp_conn_get_req(con);
+	if (!req)
+		goto error;
+	init_tcp_req(req, 0);
 
 	to = _ws_common_read_tout*1000;
 	if (gettimeofday(&(begin), NULL)) {
@@ -328,7 +331,7 @@ static inline int ws_client_handshake(struct tcp_connection *con)
 #endif
 	}
 
-	/* update the timeout - we successfully read the request */
+	/* refresh connection lifetime after successful read progress */
 	tcp_conn_reset_lifetime(con);
 	con->timeout=con->lifetime;
 
@@ -405,13 +408,11 @@ static int ws_server_handshake(struct tcp_connection *con)
 	struct tcp_req *req;
 	str trace_str;
 
-	if (con->con_req) {
+	if (con->msg_attempts) {
 		if (WS_TYPE(con) != WS_SERVER) {
 			LM_BUG("cannot create handshake as %d\n", WS_TYPE(con));
 			return -1;
 		}
-		req=con->con_req;
-		LM_DBG("Using the per connection buff \n");
 	} else {
 		if (WS_TYPE(con) != WS_NONE) {
 			LM_BUG("not a new connection here %d", WS_TYPE(con));
@@ -419,11 +420,15 @@ static int ws_server_handshake(struct tcp_connection *con)
 		}
 		WS_TYPE(con) = WS_SERVER;
 		WS_STATE(con) = WS_CON_HANDSHAKE;
-		LM_DBG("Using the global ( per process ) buff \n");
-		init_tcp_req(&_ws_common_tcp_current_req, 0);
-		req=&_ws_common_tcp_current_req;
-		/* first time here, mark the state as being SERVER */
+		req = tcp_conn_get_req(con);
+		if (!req)
+			return -1;
+		init_tcp_req(req, 0);
 	}
+	req = tcp_conn_get_req(con);
+	if (!req)
+		return -1;
+	LM_DBG("Using the per connection buff \n");
 
 	if (req->error == TCP_REQ_OK) {
 		bytes = ws_read_http(con, req);
@@ -466,7 +471,7 @@ static int ws_server_handshake(struct tcp_connection *con)
 #endif
 		}
 
-		/* update the timeout - we successfully read the request */
+		/* refresh connection lifetime after successful read progress */
 		tcp_conn_reset_lifetime(con);
 		con->timeout=con->lifetime;
 
@@ -486,11 +491,6 @@ static int ws_server_handshake(struct tcp_connection *con)
 			 * the connection */
 			LM_DBG("We're releasing the connection in state %d \n",
 					con->state);
-			if (req != &_ws_common_tcp_current_req) {
-				/* we have the buffer in the connection tied buff -
-				 *	detach it , release the conn and free it afterwards */
-				con->con_req = NULL;
-			}
 			/* TODO - we could indicate to the TCP net layer to release
 			 * the connection -> other worker may read the next available
 			 * message on the pipe */
@@ -523,10 +523,6 @@ static int ws_server_handshake(struct tcp_connection *con)
 		}
 
 		con->msg_attempts = 0;
-		if (req != &_ws_common_tcp_current_req) {
-			shm_free(req);
-			con->con_req = NULL;
-		}
 
 		/* handshake now completed, destroy the handshake data */
 		WS_STATE(con) = WS_CON_HANDSHAKE_DONE;
@@ -548,47 +544,6 @@ static int ws_server_handshake(struct tcp_connection *con)
 		}
 	}
 
-	if (!req->complete && (req == &_ws_common_tcp_current_req)) {
-		/* let's duplicate this - most likely another conn will come in */
-
-		con->con_req = shm_malloc(sizeof(struct tcp_req));
-		if (con->con_req == NULL) {
-			LM_ERR("No more mem for dynamic con request buffer\n");
-			goto error;
-		}
-
-		if (req->pos != req->buf) {
-			/* we have read some bytes */
-			memcpy(con->con_req->buf,req->buf,req->pos-req->buf);
-			con->con_req->pos = con->con_req->buf + (req->pos-req->buf);
-		} else {
-			con->con_req->pos = con->con_req->buf;
-		}
-
-		if (req->start != req->buf)
-			con->con_req->start = con->con_req->buf +(req->start-req->buf);
-		else
-			con->con_req->start = con->con_req->buf;
-
-		if (req->parsed != req->buf)
-			con->con_req->parsed =con->con_req->buf+(req->parsed-req->buf);
-		else
-			con->con_req->parsed = con->con_req->buf;
-
-		if (req->body != 0) {
-			con->con_req->body = con->con_req->buf + (req->body-req->buf);
-		} else
-			con->con_req->body = 0;
-
-		con->con_req->complete=req->complete;
-		con->con_req->has_content_len=req->has_content_len;
-		con->con_req->content_len=req->content_len;
-		con->con_req->bytes_to_go=req->bytes_to_go;
-		con->con_req->error = req->error;
-		con->con_req->state = req->state;
-		/* req will be reset on the next usage */
-	}
-
 	LM_DBG("ws_read end\n");
 done:
 	/* connection will be released */
@@ -597,10 +552,6 @@ error:
 	/* connection will be released as ERROR */
 	if (WS_STATE(con) == WS_CON_BAD_REQ)
 		ws_bad_handshake(con);
-	if (req != &_ws_common_tcp_current_req) {
-		shm_free(req);
-		con->con_req = NULL;
-	}
 	return -1;
 }
 
@@ -844,10 +795,13 @@ static int ws_parse_req_handshake(struct tcp_connection *c, char *msg, int len)
 	memset(&tmp_msg, 0, sizeof(struct sip_msg));
 	tmp_msg.len = len;
 	tmp_msg.buf = tmp_msg.unparsed = msg;
+	pthread_mutex_lock(&ws_http_parse_lock);
 	if (parse_headers_aux(&tmp_msg, HDR_EOH_F, 0,0) < 0) {
+		pthread_mutex_unlock(&ws_http_parse_lock);
 		LM_ERR("cannot parse headers\n%.*s\n", len, msg);
 		goto ws_error;
 	}
+	pthread_mutex_unlock(&ws_http_parse_lock);
 	/* verify headers according to RFC6455 */
 	for (hf = tmp_msg.headers; hf; hf = hf->next) {
 		if (hf->type != HDR_OTHER_T)
@@ -1122,10 +1076,13 @@ static int ws_parse_rpl_handshake(struct tcp_connection *c, char *msg, int len)
 	memset(&tmp_msg, 0, sizeof(struct sip_msg));
 	tmp_msg.len = len;
 	tmp_msg.buf = tmp_msg.unparsed = msg;
+	pthread_mutex_lock(&ws_http_parse_lock);
 	if (parse_headers_aux(&tmp_msg, HDR_EOH_F, 0, 0) < 0) {
+		pthread_mutex_unlock(&ws_http_parse_lock);
 		LM_ERR("cannot parse headers\n%.*s\n", len, msg);
 		goto ws_error;
 	}
+	pthread_mutex_unlock(&ws_http_parse_lock);
 	/* verify headers according to RFC6455 */
 	for (hf = tmp_msg.headers; hf; hf = hf->next) {
 		if (hf->type != HDR_OTHER_T)
@@ -1617,6 +1574,13 @@ static int ws_read_http(struct tcp_connection *c, struct tcp_req *r)
 					case '8':
 					case '9':
 						r->content_len=r->content_len*10+(*p-'0');
+						if (r->content_len>=TCP_BUF_SIZE) {
+							LM_ERR("Content-Length value %d bigger than the "
+								"reading buffer\n", r->content_len);
+							r->error = TCP_REQ_BAD_LEN;
+							r->state = H_SKIP;
+							r->content_len = 0;
+						}
 						break;
 					case '\r':
 					case ' ':

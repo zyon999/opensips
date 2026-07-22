@@ -69,6 +69,8 @@ dialog Module
               1.6.51. replicate_profiles_timer (string)
               1.6.52. replicate_profiles_expire (string)
               1.6.53. cluster_auto_sync (string)
+              1.6.54. auto_prack_hangup_on_failure (int)
+              1.6.55. auto_prack_fr_timeout (int)
 
         1.7. Exported Functions
 
@@ -128,21 +130,21 @@ dialog Module
 
         1.9. Exported MI Functions
 
-              1.9.1. dlg_list
-              1.9.2. dlg_list_ctx
-              1.9.3. dlg_end_dlg
-              1.9.4. profile_get_size
-              1.9.5. profile_list_dlgs
-              1.9.6. profile_get_values
-              1.9.7. profile_end_dlgs
-              1.9.8. dlg_db_sync
-              1.9.9. dlg_cluster_sync
-              1.9.10. dlg_restore_db
-              1.9.11. list_all_profiles
-              1.9.12. dlg_push_var
-              1.9.13. dlg_send_sequential
-              1.9.14. set_dlg_profile
-              1.9.15. unset_dlg_profile
+              1.9.1. dialog:list
+              1.9.2. dialog:list_ctx
+              1.9.3. dialog:end_dlg
+              1.9.4. dialog:profile_get_size
+              1.9.5. dialog:profile_list_dlgs
+              1.9.6. dialog:profile_get_values
+              1.9.7. dialog:profile_end_dlgs
+              1.9.8. dialog:db_sync
+              1.9.9. dialog:cluster_sync
+              1.9.10. dialog:restore_db
+              1.9.11. dialog:list_all_profiles
+              1.9.12. dialog:push_var
+              1.9.13. dialog:send_sequential
+              1.9.14. dialog:set_profile
+              1.9.15. dialog:unset_profile
 
         1.10. Exported Pseudo-Variables
 
@@ -1150,6 +1152,29 @@ modparam("dialog", "replicate_profiles_expire", 10)
 modparam("dialog", "cluster_auto_sync", 0)
 ...
 
+1.6.54. auto_prack_hangup_on_failure (int)
+
+   Controls how dialogs created with the “auto-prack” flag react
+   when the automatically generated PRACK transaction fails. A
+   value of 1 causes OpenSIPS to generate a native 502 Bad Gateway
+   reply on the correlated INVITE transaction, while a value of 0
+   leaves the INVITE transaction untouched.
+
+   A failure means that the local PRACK transaction either
+   completed with a final negative reply or hit TM failure
+   handling.
+
+   Default value is “0” (disabled).
+
+1.6.55. auto_prack_fr_timeout (int)
+
+   Specifies the TM FR timeout, in seconds, for PRACK transactions
+   generated automatically for dialogs created with the
+   “auto-prack” flag. This value is applied to the local PRACK
+   transaction immediately after it is created.
+
+   Default value is “3”.
+
 1.7. Exported Functions
 
 1.7.1.  create_dialog([flags])
@@ -1160,26 +1185,36 @@ modparam("dialog", "cluster_auto_sync", 0)
    special behavior to be done for the current dialog.
 
    Parameters:
-     * flags (string, optional) Possible values here are :
-          + B - Upon reaching dialog lifetime, BYEs will be
-            triggered both ways
-          + P - Ping caller side with OPTIONS messages, once every
-            options_ping_interval seconds
-          + p - Ping callee side with OPTIONS messages, once every
-            options_ping_interval seconds
-          + R - Ping caller side with RE-INVITE messages, once
-            every reinvite_ping_interval seconds
-          + r - Ping callee side with RE-INVITE messages, once
-            every reinvite_ping_interval seconds
-          + E - Upon detecting a SIP Race condition (see RFC
-            5407), end the call after race_condition_timeout
+     * flags (string, optional) Possible values here are:
+          + “bye-on-timeout” - upon reaching dialog lifetime, BYEs
+            will be triggered both ways
+          + “options-ping-caller” - ping caller side with OPTIONS
+            messages, once every options_ping_interval seconds
+          + “options-ping-callee” - ping callee side with OPTIONS
+            messages, once every options_ping_interval seconds
+          + “reinvite-ping-caller” - ping caller side with
+            RE-INVITE messages, once every reinvite_ping_interval
             seconds
-       Multiple string flags can be used at the same time, ie.
-       passing "BPp" flags will enable all 3 flags.
+          + “reinvite-ping-callee” - ping callee side with
+            RE-INVITE messages, once every reinvite_ping_interval
+            seconds
+          + “end-on-race-condition” - upon detecting a SIP Race
+            condition (see RFC 5407), end the call after
+            race_condition_timeout seconds
+          + “auto-prack” - automatically generate PRACK requests
+            for reliable 101-199 provisional INVITE replies
+            carrying an RSeq header
+       Multiple string flags can be used at the same time as a
+       CSV, i.e. passing
+       “bye-on-timeout,options-ping-caller,options-ping-callee”
+       will enable all 3 flags.
 
    NOTE: both RE-INVITE and OPTIONS pinging cannot be enabled at
-   the same time for a single dialog leg. If both flags ("PR" or
-   "pr") are provided only RE-INVITE pinging will be used.
+   the same time for a single dialog leg. If both flags for the
+   same leg are provided (for example
+   “options-ping-caller,reinvite-ping-caller” or
+   “options-ping-callee,reinvite-ping-callee”), only RE-INVITE
+   pinging will be used.
 
    The function returns true if the dialog was successfully
    created or if the dialog was previously created.
@@ -1191,13 +1226,16 @@ modparam("dialog", "cluster_auto_sync", 0)
 create_dialog();
 ...
 #ping caller
-create_dialog("P");
+create_dialog("options-ping-caller");
 ...
 #ping caller and callee
-create_dialog("Pp");
+create_dialog("options-ping-caller,options-ping-callee");
 
 #bye on timeout
-create_dialog("B");
+create_dialog("bye-on-timeout");
+
+#auto-PRACK reliable provisional replies
+create_dialog("auto-prack");
 ...
 
 1.7.2.  match_dialog([dlg_match_mode])
@@ -1477,9 +1515,9 @@ if ( get_dialogs_by_profile("caller",$fU,$avp(dlg_jsons),$avp(dlg_no)) )
        was used in the first parameter. It can be callid (SIP
        Call-ID) or did (internal Dialog ID). By default callid
        will be assumed.
-     * id_type (integer,optional) - if set to something different
-       than 0, it only considers active dialogs - dialogs that are
-       not deleted.
+     * active_only (integer,optional) - if set to something
+       different than 0, it only considers active dialogs -
+       dialogs that are not deleted.
 
    This function can be used from any type of route.
 
@@ -2020,7 +2058,9 @@ each in-dialog request
 
 1.9. Exported MI Functions
 
-1.9.1.  dlg_list
+1.9.1.  dialog:list
+
+   Replaces obsolete MI command: dlg_list.
 
    Lists the description of the dialogs (calls). If no parameter
    is given, all dialogs will be listed. If a dialog identifier is
@@ -2029,7 +2069,7 @@ each in-dialog request
    list only a number of "counter" dialogs starting with index (as
    offset) - this is used to get only section of dialogs.
 
-   Name: dlg_list
+   Name: dialog:list
 
    Parameters (with dialog idetification):
      * callid (optional) - callid if a single dialog to be listed.
@@ -2044,30 +2084,34 @@ each in-dialog request
 
    MI FIFO Command Format:
                 ## list all ongoing dialogs
-                opensips-cli -x mi dlg_list
+                opensips-cli -x mi dialog:list
                 ## list the dialog by callid and From TAG
-                opensips-cli -x mi dlg_list callid=abcdrssfrs122444@192.
-168.1.1 from_tag=AAdfeEFF33
+                opensips-cli -x mi dialog:list callid=abcdrssfrs122444@1
+92.168.1.1 from_tag=AAdfeEFF33
                 ## list 10 dialogs, starting from the position 40
                 ## (in the list of all ongoing dialogs)
-                opensips-cli -x mi dlg_list index=40 counter=10
+                opensips-cli -x mi dialog:list index=40 counter=10
 
-1.9.2. dlg_list_ctx
+1.9.2. dialog:list_ctx
 
-   The same as the “dlg_list” but including in the dialog
+   Replaces obsolete MI command: dlg_list_ctx.
+
+   The same as the “dialog:list” but including in the dialog
    description the associated context from modules sitting on top
    of the dialog module. This function also prints the dialog's
    values. In case of binary values, the non-printable chars are
    represented in hex (e.g. \x00)
 
-   Name: dlg_list_ctx
+   Name: dialog:list_ctx
 
-   Parameters: see “dlg_list”
+   Parameters: see “dialog:list”
 
    MI FIFO Command Format:
-                opensips-cli -x mi dlg_list_ctx
+                opensips-cli -x mi dialog:list_ctx
 
-1.9.3. dlg_end_dlg
+1.9.3. dialog:end_dlg
+
+   Replaces obsolete MI command: dlg_end_dlg.
 
    Terminates an ongoing dialog. If dialog is established, BYEs
    are sent in both directions. If dialog is in unconfirmed or
@@ -2075,25 +2119,28 @@ each in-dialog request
    will trigger a 487 from the callee, which, when relayed, will
    also end the dialog on the caller's side.
 
-   Name: dlg_end_dlg
+   Name: dialog:end_dlg
 
    Parameters are:
      * dialog_id - this is an identifier of the dialog - it can be
        either (1) the unique ID of the dialog (as provided by
-       dlg_list), either (2) the SIP Call-ID of the dialog.
+       dialog:list), either (2) the SIP Call-ID of the dialog.
      * extra_hdrs - (optional) string containg the extra headers
        (full format) to be added to the BYE requests.
 
-   The "dialog_id" value can be get via the "dlg_list" MI command.
+   The "dialog_id" value can be get via the "dialog:list" MI
+   command.
 
    MI FIFO Command Format:
                 # terminate the dialog via the internal Dialog-ID
-                opensips-cli -x mi dlg_end_dlg 6ae.4b38d013
+                opensips-cli -x mi dialog:end_dlg 6ae.4b38d013
                 # terminate the dialog via its SIP Call-ID
-                opensips-cli -x mi dlg_end_dlg Y2IwYjQ2YmE2ZDg5MWVkNDNkZ
-GIwZjAzNGM1ZDY
+                opensips-cli -x mi dialog:end_dlg Y2IwYjQ2YmE2ZDg5MWVkND
+NkZGIwZjAzNGM1ZDY
 
-1.9.4. profile_get_size
+1.9.4. dialog:profile_get_size
+
+   Replaces obsolete MI command: profile_get_size.
 
    Returns the number of dialogs belonging to a profile. If the
    profile supports values, the check can be reinforced to take
@@ -2103,16 +2150,18 @@ GIwZjAzNGM1ZDY
    Note that the profile does not supports values, this will be
    silently discarded.
 
-   Name: profile_get_size
+   Name: dialog:profile_get_size
 
    Parameters:
      * profile - name of the profile to get the value for.
      * value (optional)- string value to toughen the check;
 
    MI FIFO Command Format:
-                opensips-cli -x mi profile_get_size inboundCalls
+                opensips-cli -x mi dialog:profile_get_size inboundCalls
 
-1.9.5. profile_list_dlgs
+1.9.5. dialog:profile_list_dlgs
+
+   Replaces obsolete MI command: profile_list_dlgs.
 
    Lists all the dialogs belonging to a profile. If the profile
    supports values, the check can be reinforced to take into
@@ -2124,37 +2173,42 @@ GIwZjAzNGM1ZDY
    using the CacheDB interface, this command will only display the
    local dialogs.
 
-   Name: profile_list_dlgs
+   Name: dialog:profile_list_dlgs
 
    Parameters:
      * profile - name of the profile to list the dialog for.
      * value (optional)- string value to toughen the check;
 
    MI FIFO Command Format:
-                opensips-cli -x mi profile_list_dlgs inboundCalls
+                opensips-cli -x mi dialog:profile_list_dlgs inboundCalls
 
-1.9.6. profile_get_values
+1.9.6. dialog:profile_get_values
+
+   Replaces obsolete MI command: profile_get_values.
 
    Lists all the values belonging to a profile along with their
    count. If the profile does not support values a total count
    will be returned. Note that this function does not work for
    shared profiles over the CacheDB interface.
 
-   Name: profile_get_values
+   Name: dialog:profile_get_values
 
    Parameters:
      * profile - name of the profile to list the dialog for.
 
    MI FIFO Command Format:
-                opensips-cli -x mi profile_get_values inboundCalls
+                opensips-cli -x mi dialog:profile_get_values inboundCall
+s
 
-1.9.7. profile_end_dlgs
+1.9.7. dialog:profile_end_dlgs
+
+   Replaces obsolete MI command: profile_end_dlgs.
 
    Terminate all ongoing dialogs from a specified profile, on a
    single dialog it performs the same operations as the command
-   dlg_end_dlg
+   dialog:end_dlg
 
-   Name: profile_end_dlgs
+   Name: dialog:profile_end_dlgs
 
    Parameters:
      * profile - name of the profile that will have its dialogs
@@ -2163,9 +2217,11 @@ GIwZjAzNGM1ZDY
        only the dialogs with the specified value
 
    MI FIFO Command Format:
-                opensips-cli -x mi profile_end_dlgs inboundCalls
+                opensips-cli -x mi dialog:profile_end_dlgs inboundCalls
 
-1.9.8. dlg_db_sync
+1.9.8. dialog:db_sync
+
+   Replaces obsolete MI command: dlg_db_sync.
 
    Will load all the information about the dialogs from the
    database in the OpenSIPS internal memory. If a dialog is
@@ -2173,14 +2229,16 @@ GIwZjAzNGM1ZDY
    will be updated with the values from DB. Otherwise, the newer
    in-memory version will not be changed.
 
-   Name: dlg_db_sync
+   Name: dialog:db_sync
 
    It takes no parameters
 
    MI FIFO Command Format:
-                opensips-cli -x mi dlg_db_sync
+                opensips-cli -x mi dialog:db_sync
 
-1.9.9. dlg_cluster_sync
+1.9.9. dialog:cluster_sync
+
+   Replaces obsolete MI command: dlg_cluster_sync.
 
    This command will only take effect if dialog replication is
    enabled.
@@ -2192,46 +2250,52 @@ GIwZjAzNGM1ZDY
    specified in order to sync only dialogs marked with that
    sharing tag.
 
-   Name: dlg_cluster_sync
+   Name: dialog:cluster_sync
 
    Parameters:
      * sharing_tag - name of the sharing tag that dialogs have to
        be marked with in order to be synced
 
    MI FIFO Command Format:
-                opensips-cli -x mi dlg_cluster_sync vip1
+                opensips-cli -x mi dialog:cluster_sync vip1
 
-1.9.10. dlg_restore_db
+1.9.10. dialog:restore_db
+
+   Replaces obsolete MI command: dlg_restore_db.
 
    Restores the dialog table after a potential desynchronization
    event. The table is truncated, then populated with CONFIRMED
    dialogs from memory.
 
-   Name: dlg_restore_db
+   Name: dialog:restore_db
 
    It takes no parameters
 
    MI FIFO Command Format:
-                opensips-cli -x mi dlg_restore_db
+                opensips-cli -x mi dialog:restore_db
 
-1.9.11. list_all_profiles
+1.9.11. dialog:list_all_profiles
+
+   Replaces obsolete MI command: list_all_profiles.
 
    Lists all the dialog profiles, along with 1 or 0 if the given
    profile has/does not have an associated value.
 
-   Name: list_all_profiles
+   Name: dialog:list_all_profiles
 
    Parameters: It takes no parameters
 
    MI FIFO Command Format:
-                opensips-cli -x mi list_all_profiles
+                opensips-cli -x mi dialog:list_all_profiles
 
-1.9.12. dlg_push_var
+1.9.12. dialog:push_var
+
+   Replaces obsolete MI command: dlg_push_var.
 
    Push or update a dialog value for the given list of dialog IDs
    / Call-IDs.
 
-   Name: dlg_push_var
+   Name: dialog:push_var
 
    Parameters: It takes 3 or more parameters
      * dlg_val_name - name of the dialog value that needs to be
@@ -2241,14 +2305,16 @@ GIwZjAzNGM1ZDY
        actual Call-ID.
 
    MI FIFO Command Format:
-                opensips-cli -x mi dlg_push_var var_name var_value DID1
-[ DID2 DID3 ...  DIDN ]
+                opensips-cli -x mi dialog:push_var var_name var_value DI
+D1 [ DID2 DID3 ...  DIDN ]
 
-1.9.13. dlg_send_sequential
+1.9.13. dialog:send_sequential
+
+   Replaces obsolete MI command: dlg_send_sequential.
 
    Sends a sequential request within an ongoing dialog.
 
-   Name: dlg_send_sequential
+   Name: dialog:send_sequential
 
    Parameters:
      * callid - the callid of the dialog you need to trigger the
@@ -2305,18 +2371,18 @@ GIwZjAzNGM1ZDY
    or normal mode.
 
    MI Command Format:
-                        opensips-cli -x mi dlg_send_sequential \
+                        opensips-cli -x mi dialog:send_sequential \
                                 callid=5291231-testing@127.0.0.1
 
    MI Command used to trigger media re-negotiation:
-                        opensips-cli -x mi dlg_send_sequential \
+                        opensips-cli -x mi dialog:send_sequential \
                                 callid=5291231-testing@127.0.0.1 \
                                 mode=challenge \
                                 body=inbound
 
    MI Command used to UPDATE the callee's remote Contact after a
    server failover:
-                        opensips-cli -x mi dlg_send_sequential \
+                        opensips-cli -x mi dialog:send_sequential \
                                 callid=5291231-testing@127.0.0.1 \
                                 mode=challenge-callee \
                                 body=outbound \
@@ -2324,7 +2390,7 @@ GIwZjAzNGM1ZDY
 
    MI Command used to send REFER to the callee, and add Refer-To
    header:
-                        opensips-cli -x mi dlg_send_sequential \
+                        opensips-cli -x mi dialog:send_sequential \
                                 callid=usR8FlGOSMfCTAIHebHCOQ.. \
                                 method=REFER \
                                 body=none \
@@ -2332,13 +2398,15 @@ GIwZjAzNGM1ZDY
                                 headers='Refer-To: sip:user@domain:50060
 '
 
-1.9.14. set_dlg_profile
+1.9.14. dialog:set_profile
+
+   Replaces obsolete MI command: set_dlg_profile.
 
    Set the dialog identified by dialog ID / Call-ID into the given
    profile ( with optional value and clearing of the old profile
    values )
 
-   Name: set_dlg_profile
+   Name: dialog:set_profile
 
    Parameters: It takes 2-4 parameters
      * dlg_id - dialog ID or Call-ID for the respective dialog
@@ -2348,16 +2416,17 @@ GIwZjAzNGM1ZDY
        profile before setting the new one
 
    MI FIFO Command Format:
-                opensips-cli -x mi set_dlg_profile DID my_profile my_val
-ue 1
+                opensips-cli -x mi dialog:set_profile dlg_id=DID profile
+=my_profile value=my_value clear_values=1
 
-1.9.15. unset_dlg_profile
+1.9.15. dialog:unset_profile
+
+   Replaces obsolete MI command: unset_dlg_profile.
 
    Unsets the dialog identified by dialog ID / Call-ID from the
-   given profile ( with optional value and clearing of the old
-   profile values )
+   given profile (with optional value).
 
-   Name: set_dlg_profile
+   Name: dialog:unset_profile
 
    Parameters: It takes 2-3 parameters
      * dlg_id - dialog ID or Call-ID for the respective dialog
@@ -2367,8 +2436,8 @@ ue 1
        clear all values of the given profile.
 
    MI FIFO Command Format:
-                opensips-cli -x mi unset_dlg_profile DID my_profile my_v
-alue
+                opensips-cli -x mi dialog:unset_profile dlg_id=DID profi
+le=my_profile value=my_value
 
 1.10. Exported Pseudo-Variables
 
@@ -2427,8 +2496,8 @@ alue
 
    Returns the id of the dialog corresponding to the processed
    sequential request. The output format is a string identical to
-   the one returned by the dlg_list MI function. This PV will be
-   available only for sequential requests, after doing
+   the one returned by the dialog:list MI function. This PV will
+   be available only for sequential requests, after doing
    loose_route().
 
    NULL will be returned if there is no dialog for the request.
@@ -2479,7 +2548,7 @@ alue
 1.10.10. $DLG_json
 
    The variable is read-only and exposes a JSON variable
-   containing all the information that the dlg_list MI function
+   containing all the information that the dialog:list MI function
    contains
 
    NULL will be returned if there is no dialog for the request,
@@ -2488,7 +2557,7 @@ alue
 1.10.11. $DLG_ctx_json
 
    The variable is read-only and exposes a JSON variable
-   containing all the information that the dlg_list_ctx MI
+   containing all the information that the dialog:list_ctx MI
    function contains ( on top of $DLG_json, this will expose the
    full list of dialog vars and profile links for the current
    dialog )
@@ -2649,30 +2718,30 @@ Chapter 4. Contributors
    Table 4.1. Top contributors by DevScore^(1), authored
    commits^(2) and lines added/removed^(3)
      Name DevScore Commits Lines ++ Lines --
-   1. Bogdan-Andrei Iancu (@bogdan-iancu) 462 290 13381 3553
-   2. Razvan Crainea (@razvancrainea) 301 224 5515 1811
-   3. Vlad Paiu (@vladpaiu) 262 149 7467 3027
-   4. Vlad Patrascu (@rvlad-patrascu) 200 104 4330 3514
-   5. Liviu Chircu (@liviuchircu) 183 133 3128 1374
-   6. Ovidiu Sas (@ovidiusas) 35 26 601 161
+   1. Bogdan-Andrei Iancu (@bogdan-iancu) 474 298 13701 3576
+   2. Razvan Crainea (@razvancrainea) 311 231 5686 1917
+   3. Vlad Paiu (@vladpaiu) 263 149 7467 3027
+   4. Liviu Chircu (@liviuchircu) 205 144 4042 1599
+   5. Vlad Patrascu (@rvlad-patrascu) 200 104 4330 3514
+   6. Ovidiu Sas (@ovidiusas) 38 29 607 167
    7. Dan Pascu (@danpascu) 30 25 233 179
    8. Eseanu Marius Cristian (@eseanucristian) 19 6 722 341
    9. Daniel-Constantin Mierla (@miconda) 16 13 76 66
    10. Henning Westerholt (@henningw) 16 10 172 187
 
    All remaining contributors: Anca Vamanu, Walter Doekes
-   (@wdoekes), Ionut Ionita (@ionutrazvanionita), Maksym Sobolyev
-   (@sobomax), Ionel Cerghit (@ionel-cerghit), Andrei Dragus,
+   (@wdoekes), Ionut Ionita (@ionutrazvanionita), Andrei Dragus,
+   Maksym Sobolyev (@sobomax), Ionel Cerghit (@ionel-cerghit),
    Alexandra Titoc, John Riordan, Hugues Mitonneau, Carsten Bock,
-   Peter Lemenkov (@lemenkov), Jerome Martin, Klaus Darilion,
-   Jarrod Baumann (@jarrodb), Nick Altmann (@nikbyte), Zero King
-   (@l2dy), Michel Bensoussan, Richard Revels, Tavis Paquette,
-   Elena-Ramona Modroiu, Ryan Bullock, Andrei Datcu
-   (@andrei-datcu), Jeffrey Magder, Stefan-Cristian Mititelu, Ron
-   Winacott, Andy Pyles, Julián Moreno Patiño, Konstantin
-   Bokarius, sergei lavrov, Alex Massover, Damien Sandras
-   (@dsandras), Alex Hermann, Dusan Klinec (@ph4r05), Norman
-   Brandinger (@NormB), UnixDev, Eliot Gable, Ryan Bullock
+   Norman Brandinger (@NormB), Peter Lemenkov (@lemenkov), Jerome
+   Martin, Klaus Darilion, Jarrod Baumann (@jarrodb), Nick Altmann
+   (@nikbyte), Zero King (@l2dy), Michel Bensoussan, Richard
+   Revels, Elena-Ramona Modroiu, Tavis Paquette, Ryan Bullock,
+   Andrei Datcu (@andrei-datcu), Jeffrey Magder, Stefan-Cristian
+   Mititelu, Norm Brandinger, Ron Winacott, Andy Pyles, Julián
+   Moreno Patiño, Konstantin Bokarius, sergei lavrov, Alex
+   Massover, Damien Sandras (@dsandras), Alex Hermann, Dusan
+   Klinec (@ph4r05), UnixDev, Eliot Gable, Ryan Bullock
    (@rrb3942), Edson Gellert Schubert.
 
    (1) DevScore = author_commits + author_lines_added /
@@ -2683,7 +2752,7 @@ Chapter 4. Contributors
    merge commits. Regarding imported patches/code, we do our best
    to count the work on behalf of the proper owner, as per the
    "fix_authors" and "mod_renames" arrays in
-   opensips/doc/build-contrib.sh. If you identify any
+   opensips/docs/build-contrib.sh. If you identify any
    patches/commits which do not get properly attributed to you,
    please submit a pull request which extends "fix_authors" and/or
    "mod_renames".
@@ -2695,31 +2764,32 @@ Chapter 4. Contributors
 
    Table 4.2. Most recently active contributors^(1) to this module
                       Name                   Commit Activity
-   1.  Bogdan-Andrei Iancu (@bogdan-iancu) Apr 2006 - Jan 2026
-   2.  Razvan Crainea (@razvancrainea)     Aug 2010 - Sep 2025
-   3.  Vlad Paiu (@vladpaiu)               Oct 2010 - Jan 2025
-   4.  Alexandra Titoc                     Sep 2024 - Sep 2024
-   5.  Stefan-Cristian Mititelu            Jan 2024 - Jan 2024
-   6.  Maksym Sobolyev (@sobomax)          Nov 2020 - Nov 2023
-   7.  Vlad Patrascu (@rvlad-patrascu)     Jul 2016 - Jun 2023
-   8.  Ovidiu Sas (@ovidiusas)             Feb 2008 - Jun 2023
-   9.  Ryan Bullock                        May 2023 - May 2023
-   10. Peter Lemenkov (@lemenkov)          Jun 2018 - Sep 2022
+   1.  Bogdan-Andrei Iancu (@bogdan-iancu) Apr 2006 - Jul 2026
+   2.  Razvan Crainea (@razvancrainea)     Aug 2010 - Jun 2026
+   3.  Ovidiu Sas (@ovidiusas)             Feb 2008 - Jun 2026
+   4.  Liviu Chircu (@liviuchircu)         Aug 2012 - Apr 2026
+   5.  Norman Brandinger (@NormB)          Oct 2013 - Apr 2026
+   6.  Norm Brandinger                     Mar 2026 - Mar 2026
+   7.  Vlad Paiu (@vladpaiu)               Oct 2010 - Jan 2025
+   8.  Alexandra Titoc                     Sep 2024 - Sep 2024
+   9.  Stefan-Cristian Mititelu            Jan 2024 - Jan 2024
+   10. Maksym Sobolyev (@sobomax)          Nov 2020 - Nov 2023
 
-   All remaining contributors: Nick Altmann (@nikbyte), Walter
-   Doekes (@wdoekes), Liviu Chircu (@liviuchircu), sergei lavrov,
-   Zero King (@l2dy), Dan Pascu (@danpascu), Ionel Cerghit
-   (@ionel-cerghit), Jarrod Baumann (@jarrodb), Ionut Ionita
-   (@ionutrazvanionita), Julián Moreno Patiño, Dusan Klinec
-   (@ph4r05), Eseanu Marius Cristian (@eseanucristian), Andrei
-   Datcu (@andrei-datcu), Norman Brandinger (@NormB), Damien
-   Sandras (@dsandras), Ryan Bullock (@rrb3942), Anca Vamanu, Alex
-   Massover, Andrei Dragus, John Riordan, Hugues Mitonneau,
-   Richard Revels, UnixDev, Alex Hermann, Henning Westerholt
-   (@henningw), Carsten Bock, Klaus Darilion, Daniel-Constantin
-   Mierla (@miconda), Konstantin Bokarius, Edson Gellert Schubert,
-   Jerome Martin, Tavis Paquette, Michel Bensoussan, Eliot Gable,
-   Andy Pyles, Elena-Ramona Modroiu, Jeffrey Magder, Ron Winacott.
+   All remaining contributors: Vlad Patrascu (@rvlad-patrascu),
+   Ryan Bullock, Peter Lemenkov (@lemenkov), Nick Altmann
+   (@nikbyte), Walter Doekes (@wdoekes), sergei lavrov, Zero King
+   (@l2dy), Dan Pascu (@danpascu), Ionel Cerghit (@ionel-cerghit),
+   Jarrod Baumann (@jarrodb), Ionut Ionita (@ionutrazvanionita),
+   Julián Moreno Patiño, Dusan Klinec (@ph4r05), Eseanu Marius
+   Cristian (@eseanucristian), Andrei Datcu (@andrei-datcu),
+   Damien Sandras (@dsandras), Ryan Bullock (@rrb3942), Anca
+   Vamanu, Alex Massover, Andrei Dragus, John Riordan, Hugues
+   Mitonneau, Richard Revels, UnixDev, Alex Hermann, Henning
+   Westerholt (@henningw), Carsten Bock, Klaus Darilion,
+   Daniel-Constantin Mierla (@miconda), Konstantin Bokarius, Edson
+   Gellert Schubert, Jerome Martin, Tavis Paquette, Michel
+   Bensoussan, Eliot Gable, Andy Pyles, Elena-Ramona Modroiu,
+   Jeffrey Magder, Ron Winacott.
 
    (1) including any documentation-related commits, excluding
    merge commits
@@ -2728,16 +2798,16 @@ Chapter 5. Documentation
 
 5.1. Contributors
 
-   Last edited by: Razvan Crainea (@razvancrainea), Vlad Paiu
-   (@vladpaiu), Liviu Chircu (@liviuchircu), Bogdan-Andrei Iancu
-   (@bogdan-iancu), Stefan-Cristian Mititelu, Ryan Bullock, Vlad
-   Patrascu (@rvlad-patrascu), Zero King (@l2dy), Dan Pascu
-   (@danpascu), Peter Lemenkov (@lemenkov), Julián Moreno Patiño,
-   Ionut Ionita (@ionutrazvanionita), Ionel Cerghit
-   (@ionel-cerghit), Walter Doekes (@wdoekes), Eseanu Marius
-   Cristian (@eseanucristian), Norman Brandinger (@NormB), Anca
-   Vamanu, Andrei Dragus, Hugues Mitonneau, Klaus Darilion,
-   Henning Westerholt (@henningw), Ovidiu Sas (@ovidiusas),
+   Last edited by: Razvan Crainea (@razvancrainea), Ovidiu Sas
+   (@ovidiusas), Liviu Chircu (@liviuchircu), Vlad Paiu
+   (@vladpaiu), Bogdan-Andrei Iancu (@bogdan-iancu),
+   Stefan-Cristian Mititelu, Ryan Bullock, Vlad Patrascu
+   (@rvlad-patrascu), Zero King (@l2dy), Dan Pascu (@danpascu),
+   Peter Lemenkov (@lemenkov), Julián Moreno Patiño, Ionut Ionita
+   (@ionutrazvanionita), Ionel Cerghit (@ionel-cerghit), Walter
+   Doekes (@wdoekes), Eseanu Marius Cristian (@eseanucristian),
+   Norman Brandinger (@NormB), Anca Vamanu, Andrei Dragus, Hugues
+   Mitonneau, Klaus Darilion, Henning Westerholt (@henningw),
    Daniel-Constantin Mierla (@miconda), Konstantin Bokarius, Edson
    Gellert Schubert, Michel Bensoussan, Andy Pyles, Elena-Ramona
    Modroiu.

@@ -165,13 +165,13 @@ static const cmd_export_t cmds[] = {
  * Exported MI functions
  */
 static const mi_export_t mi_cmds[] = {
-	{ "tls_reload", "reloads stored data from the database", 0, 0, {
+	{ "reload", "reloads stored data from the database", 0, 0, {
 		{tls_reload, {0}},
-		{EMPTY_MI_RECIPE}}
+		{EMPTY_MI_RECIPE}}, {"tls_reload", 0}
 	},
-	{ "tls_list", "lists all domains", 0, 0, {
+	{ "list", "lists all domains", 0, 0, {
 		{tls_list, {0}},
-		{EMPTY_MI_RECIPE}}
+		{EMPTY_MI_RECIPE}}, {"tls_list", 0}
 	},
 	{EMPTY_MI_EXPORT}
 };
@@ -642,11 +642,21 @@ static int init_tls_dom(struct tls_domain *d)
 	}
 
 	if (!d->cert.s) {
-		init_flags |= TLS_DOM_CERT_FILE_FL;
-		LM_NOTICE("no certificate for tls domain '%.*s' defined, using default '%s'\n",
-				d->name.len, ZSW(d->name.s), tls_cert_file);
-		d->cert.s = tls_cert_file;
-		d->cert.len = len(tls_cert_file);
+		/* Client domains can operate without a certificate (RFC 8446 4.4.2.4,
+		 * RFC 5246 7.4.6) - an empty certificate message will be sent if the
+		 * server requests one. Server domains require a certificate. */
+		if (d->flags & DOM_FLAG_SRV) {
+			init_flags |= TLS_DOM_CERT_FILE_FL;
+			LM_NOTICE("no certificate for tls server domain '%.*s' defined, "
+					"using default '%s'\n",
+					d->name.len, ZSW(d->name.s), tls_cert_file);
+			d->cert.s = tls_cert_file;
+			d->cert.len = len(tls_cert_file);
+		} else {
+			LM_INFO("no certificate for tls client domain '%.*s', "
+					"will not send client certificate\n",
+					d->name.len, ZSW(d->name.s));
+		}
 	}
 
 	if (!d->ca.s) {
@@ -722,6 +732,15 @@ static int init_tls_domains(struct tls_domain **dom)
 	prev = NULL;
 	while (d) {
 		if (!d->pkey.s) {
+			/* Client domains without a certificate don't need a private key */
+			if (!d->cert.s && (d->flags & DOM_FLAG_CLI)) {
+				LM_DBG("no private key needed for tls client domain '%.*s' "
+						"(no certificate configured)\n",
+						d->name.len, ZSW(d->name.s));
+				prev = d;
+				d = d->next;
+				continue;
+			}
 			LM_NOTICE("no private key for tls domain '%.*s' defined, using default '%s'\n",
 					d->name.len, ZSW(d->name.s), tls_pkey_file);
 			d->pkey.s = tls_pkey_file;
@@ -902,7 +921,7 @@ static int load_tls_library(void)
 				return -1;
 			}
 
-			tls_library = TLS_LIB_WOLFSSL;	
+			tls_library = TLS_LIB_WOLFSSL;
 		}
 
 		if (tls_library == TLS_LIB_NONE) {
@@ -1146,17 +1165,19 @@ static int mod_init(void) {
 	if (*tls_client_domains)
 		sort_map_dom_arrays(client_dom_matching);
 
-	/* initialize tls virtual domains */
-	if (init_tls_domains(tls_server_domains) < 0)
-		return -1;
-	if (init_tls_domains(tls_client_domains) < 0)
-		return -1;
-
 	return 0;
 }
 
 static int child_init(int rank)
 {
+	if (rank == PROC_TCP_MAIN) {
+		/* initialize tls virtual domains */
+		if (init_tls_domains(tls_server_domains) < 0)
+			return -1;
+		if (init_tls_domains(tls_client_domains) < 0)
+			return -1;
+	}
+
 	if (!tls_db_url.s || !(rank >= 1 || rank == PROC_MODULE))
 		return 0;
 
@@ -1180,12 +1201,16 @@ static void mod_destroy(void)
 	while (d) {
 		d_tmp = d;
 		d = d->next;
+		/* we cannot free .ctx in attendant */
+		d_tmp->ctx = NULL;
 		tls_free_domain(d_tmp);
 	}
 	d = *tls_client_domains;
 	while (d) {
 		d_tmp = d;
 		d = d->next;
+		/* we cannot free .ctx in attendant */
+		d_tmp->ctx = NULL;
 		tls_free_domain(d_tmp);
 	}
 
@@ -1340,24 +1365,34 @@ error:
 
 int tls_conn_init(struct tcp_connection *c, struct tls_domain *tls_dom)
 {
+	int ret;
+
+	c->proto_extra_id = tls_dom;
+
 	if (tls_library == TLS_LIB_OPENSSL)
-		return openssl_api.tls_conn_init(c, tls_dom);
+		ret = openssl_api.tls_conn_init(c, tls_dom);
 	else if (tls_library == TLS_LIB_WOLFSSL)
-		return wolfssl_api.tls_conn_init(c, tls_dom);
+		ret = wolfssl_api.tls_conn_init(c, tls_dom);
 	else {
 		LM_CRIT("No TLS library module loaded\n");
-		return -1;
+		ret = -1;
 	}
+	if (ret < 0)
+		c->proto_extra_id = NULL;
+
+	return ret;
 }
 
 void tls_conn_clean(struct tcp_connection* c, struct tls_domain **tls_dom)
 {
 	if (tls_library == TLS_LIB_OPENSSL)
-		return openssl_api.tls_conn_clean(c, tls_dom);
+		openssl_api.tls_conn_clean(c, tls_dom);
 	else if (tls_library == TLS_LIB_WOLFSSL)
-		return wolfssl_api.tls_conn_clean(c, tls_dom);
+		wolfssl_api.tls_conn_clean(c, tls_dom);
 	else
 		LM_CRIT("No TLS library module loaded\n");
+
+	c->proto_extra_id = NULL;
 }
 
 int tls_update_fd(struct tcp_connection* c, int fd)
@@ -1441,6 +1476,12 @@ int tls_read(struct tcp_connection * c,struct tcp_req *r)
 
 int tls_conn_extra_match(struct tcp_connection *c, void *id)
 {
+	if (c->flags & F_CONN_ACCEPTED)
+		return 1;
+
+	if (c->proto_extra_id)
+		return c->proto_extra_id == id;
+
 	if (tls_library == TLS_LIB_OPENSSL)
 		return openssl_api.tls_conn_extra_match(c, id);
 	else if (tls_library == TLS_LIB_WOLFSSL)

@@ -24,8 +24,8 @@ db_text Module
         1.4. Exported Functions
         1.5. Exported MI Functions
 
-              1.5.1. dbt_dump
-              1.5.2. dbt_reload
+              1.5.1. db_text:dump
+              1.5.2. db_text:reload
 
         1.6. Installation and Running
 
@@ -204,18 +204,22 @@ modparam("db_text", "buffer_size", 8192)
 
 1.5. Exported MI Functions
 
-1.5.1. dbt_dump
+1.5.1. db_text:dump
+
+   Replaces obsolete MI command: dbt_dump.
 
    Write back to hard drive modified tables.
 
-   Name: dbt_dump.
+   Name: db_text:dump.
 
    Parameters: none
 
    MI FIFO Command Format:
-opensips-cli -x mi dbt_dump
+opensips-cli -x mi db_text:dump
 
-1.5.2. dbt_reload
+1.5.2. db_text:reload
+
+   Replaces obsolete MI command: dbt_reload.
 
    Causes db_text module to reload cached tables from disk.
    Depending on parameters it could be a whole cache or a
@@ -223,7 +227,7 @@ opensips-cli -x mi dbt_dump
    reloaded from disk - the old version preserved and error
    reported.
 
-   Name: dbt_reload.
+   Name: db_text:reload.
 
    Parameters:
      * db_name (optional) - database name to reload.
@@ -231,11 +235,11 @@ opensips-cli -x mi dbt_dump
        db_name parameter) - specific table to reload.
 
    MI FIFO Command Format:
-opensips-cli -x mi dbt_reload
+opensips-cli -x mi db_text:reload
 
-opensips-cli -x mi dbt_reload /path/to/dbtext/database
+opensips-cli -x mi db_text:reload /path/to/dbtext/database
 
-opensips-cli -x mi dbt_reload /path/to/dbtext/database table_name
+opensips-cli -x mi db_text:reload /path/to/dbtext/database table_name
 
 1.6. Installation and Running
 
@@ -339,7 +343,8 @@ modparam("mi_fifo", "fifo_name", "/tmp/opensips_fifo")
 # -- usrloc params --
 
 # use dbtext database for persistent storage
-modparam("usrloc", "db_mode", 2)
+modparam("usrloc", "working_mode_preset", "single-instance-sql-write-bac
+k")
 modparam("usrloc|auth_db", "db_url", "text:///tmp/opensipsdb")
 
 # -- auth params --
@@ -445,8 +450,8 @@ Chapter 3. Contributors
      Name DevScore Commits Lines ++ Lines --
    1. Daniel-Constantin Mierla (@miconda) 135 59 6126 1441
    2. Bogdan-Andrei Iancu (@bogdan-iancu) 41 32 310 309
-   3. Henning Westerholt (@henningw) 25 15 252 410
-   4. Razvan Crainea (@razvancrainea) 23 19 123 97
+   3. Razvan Crainea (@razvancrainea) 28 24 148 114
+   4. Henning Westerholt (@henningw) 25 15 252 410
    5. Liviu Chircu (@liviuchircu) 21 18 71 110
    6. Jan Janak (@janakj) 11 7 124 106
    7. Ovidiu Sas (@ovidiusas) 8 6 105 20
@@ -454,11 +459,12 @@ Chapter 3. Contributors
    9. Alexandra Titoc 5 3 13 6
    10. Sergey Khripchenko (@shripchenko) 5 2 185 2
 
-   All remaining contributors: Jiri Kuthan (@jiriatipteldotorg),
-   Ionut Ionita (@ionutrazvanionita), Maksym Sobolyev (@sobomax),
-   Konstantin Bokarius, Razvan Pistolea, Chris Heiser, Norman
-   Brandinger (@NormB), Peter Lemenkov (@lemenkov), Edson Gellert
-   Schubert, Dusan Klinec (@ph4r05), Andrei Pelinescu-Onciul.
+   All remaining contributors: Stefan Darius, Jiri Kuthan
+   (@jiriatipteldotorg), Ionut Ionita (@ionutrazvanionita), Maksym
+   Sobolyev (@sobomax), Konstantin Bokarius, Razvan Pistolea,
+   Chris Heiser, Norman Brandinger (@NormB), Peter Lemenkov
+   (@lemenkov), Edson Gellert Schubert, Dusan Klinec (@ph4r05),
+   Andrei Pelinescu-Onciul.
 
    (1) DevScore = author_commits + author_lines_added /
    (project_lines_added / project_commits) + author_lines_deleted
@@ -468,7 +474,7 @@ Chapter 3. Contributors
    merge commits. Regarding imported patches/code, we do our best
    to count the work on behalf of the proper owner, as per the
    "fix_authors" and "mod_renames" arrays in
-   opensips/doc/build-contrib.sh. If you identify any
+   opensips/docs/build-contrib.sh. If you identify any
    patches/commits which do not get properly attributed to you,
    please submit a pull request which extends "fix_authors" and/or
    "mod_renames".
@@ -480,23 +486,23 @@ Chapter 3. Contributors
 
    Table 3.2. Most recently active contributors^(1) to this module
                       Name                   Commit Activity
-   1.  Alexandra Titoc                     Sep 2024 - Sep 2024
-   2.  Razvan Crainea (@razvancrainea)     Oct 2011 - Jul 2024
-   3.  Liviu Chircu (@liviuchircu)         Mar 2014 - May 2024
-   4.  Ovidiu Sas (@ovidiusas)             Dec 2012 - Mar 2024
-   5.  Maksym Sobolyev (@sobomax)          Feb 2023 - Feb 2023
-   6.  Vlad Patrascu (@rvlad-patrascu)     May 2017 - Dec 2021
-   7.  Bogdan-Andrei Iancu (@bogdan-iancu) Nov 2003 - Apr 2020
-   8.  Peter Lemenkov (@lemenkov)          Jun 2018 - Jun 2018
-   9.  Dusan Klinec (@ph4r05)              Dec 2015 - Dec 2015
-   10. Sergey Khripchenko (@shripchenko)   Aug 2015 - Aug 2015
+   1.  Stefan Darius                       Jun 2026 - Jul 2026
+   2.  Razvan Crainea (@razvancrainea)     Oct 2011 - Jun 2026
+   3.  Alexandra Titoc                     Sep 2024 - Sep 2024
+   4.  Liviu Chircu (@liviuchircu)         Mar 2014 - May 2024
+   5.  Ovidiu Sas (@ovidiusas)             Dec 2012 - Mar 2024
+   6.  Maksym Sobolyev (@sobomax)          Feb 2023 - Feb 2023
+   7.  Vlad Patrascu (@rvlad-patrascu)     May 2017 - Dec 2021
+   8.  Bogdan-Andrei Iancu (@bogdan-iancu) Nov 2003 - Apr 2020
+   9.  Peter Lemenkov (@lemenkov)          Jun 2018 - Jun 2018
+   10. Dusan Klinec (@ph4r05)              Dec 2015 - Dec 2015
 
-   All remaining contributors: Ionut Ionita (@ionutrazvanionita),
-   Razvan Pistolea, Henning Westerholt (@henningw),
-   Daniel-Constantin Mierla (@miconda), Konstantin Bokarius, Chris
-   Heiser, Edson Gellert Schubert, Norman Brandinger (@NormB), Jan
-   Janak (@janakj), Jiri Kuthan (@jiriatipteldotorg), Andrei
-   Pelinescu-Onciul.
+   All remaining contributors: Sergey Khripchenko (@shripchenko),
+   Ionut Ionita (@ionutrazvanionita), Razvan Pistolea, Henning
+   Westerholt (@henningw), Daniel-Constantin Mierla (@miconda),
+   Konstantin Bokarius, Chris Heiser, Edson Gellert Schubert,
+   Norman Brandinger (@NormB), Jan Janak (@janakj), Jiri Kuthan
+   (@jiriatipteldotorg), Andrei Pelinescu-Onciul.
 
    (1) including any documentation-related commits, excluding
    merge commits
@@ -505,10 +511,10 @@ Chapter 4. Documentation
 
 4.1. Contributors
 
-   Last edited by: Ovidiu Sas (@ovidiusas), Liviu Chircu
-   (@liviuchircu), Bogdan-Andrei Iancu (@bogdan-iancu), Razvan
-   Crainea (@razvancrainea), Peter Lemenkov (@lemenkov), Vlad
-   Patrascu (@rvlad-patrascu), Sergey Khripchenko (@shripchenko),
+   Last edited by: Razvan Crainea (@razvancrainea), Ovidiu Sas
+   (@ovidiusas), Liviu Chircu (@liviuchircu), Bogdan-Andrei Iancu
+   (@bogdan-iancu), Peter Lemenkov (@lemenkov), Vlad Patrascu
+   (@rvlad-patrascu), Sergey Khripchenko (@shripchenko),
    Daniel-Constantin Mierla (@miconda), Konstantin Bokarius, Edson
    Gellert Schubert, Henning Westerholt (@henningw).
 

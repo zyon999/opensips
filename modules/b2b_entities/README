@@ -44,7 +44,7 @@ B2B_ENTITIES
 
         1.5. Exported MI Functions
 
-              1.5.1. b2be_list
+              1.5.1. b2b_entities:list
               1.5.2. ua_session_client_start
               1.5.3. ua_session_update
               1.5.4. ua_session_reply
@@ -467,17 +467,19 @@ ua_session_terminate($var(b2b_key));
 
 1.5. Exported MI Functions
 
-1.5.1.  b2be_list
+1.5.1.  b2b_entities:list
+
+   Replaces obsolete MI command: b2be_list.
 
    This command can be used to list the internals of the b2b
    entities.
 
-   Name: b2be_list
+   Name: b2b_entities:list
 
    Parameters: none
 
    MI FIFO Command Format:
-        opensips-cli -x mi b2be_list
+        opensips-cli -x mi b2b_entities:list
 
 1.5.2.  ua_session_client_start
 
@@ -813,10 +815,10 @@ Chapter 3. Contributors
    commits^(2) and lines added/removed^(3)
      Name DevScore Commits Lines ++ Lines --
    1. Anca Vamanu 183 94 6839 1860
-   2. Vlad Patrascu (@rvlad-patrascu) 127 62 5443 1147
-   3. Razvan Crainea (@razvancrainea) 91 74 837 538
-   4. Bogdan-Andrei Iancu (@bogdan-iancu) 61 52 518 202
-   5. Ovidiu Sas (@ovidiusas) 58 43 988 348
+   2. Vlad Patrascu (@rvlad-patrascu) 128 62 5443 1147
+   3. Razvan Crainea (@razvancrainea) 106 85 1184 627
+   4. Bogdan-Andrei Iancu (@bogdan-iancu) 69 57 655 309
+   5. Ovidiu Sas (@ovidiusas) 59 44 990 348
    6. Liviu Chircu (@liviuchircu) 22 18 99 128
    7. Maksym Sobolyev (@sobomax) 7 5 30 23
    8. Vlad Paiu (@vladpaiu) 6 4 74 47
@@ -826,8 +828,8 @@ Chapter 3. Contributors
    All remaining contributors: Alexandra Titoc, Giedrius,
    Stanislaw Pitucha, Peter Lemenkov (@lemenkov), Ionut Ionita
    (@ionutrazvanionita), @DMOsipov, Stéphane Alnet (@shimaore),
-   Henk Hesselink, Ryan Bullock (@rrb3942), Ibrahim Shahzad,
-   Walter Doekes (@wdoekes).
+   Henk Hesselink, Ryan Bullock (@rrb3942), Norman Brandinger
+   (@NormB), Ibrahim Shahzad, Walter Doekes (@wdoekes).
 
    (1) DevScore = author_commits + author_lines_added /
    (project_lines_added / project_commits) + author_lines_deleted
@@ -837,7 +839,7 @@ Chapter 3. Contributors
    merge commits. Regarding imported patches/code, we do our best
    to count the work on behalf of the proper owner, as per the
    "fix_authors" and "mod_renames" arrays in
-   opensips/doc/build-contrib.sh. If you identify any
+   opensips/docs/build-contrib.sh. If you identify any
    patches/commits which do not get properly attributed to you,
    please submit a pull request which extends "fix_authors" and/or
    "mod_renames".
@@ -849,19 +851,19 @@ Chapter 3. Contributors
 
    Table 3.2. Most recently active contributors^(1) to this module
                       Name                   Commit Activity
-   1.  Bogdan-Andrei Iancu (@bogdan-iancu) Aug 2009 - Feb 2026
-   2.  Razvan Crainea (@razvancrainea)     Dec 2010 - Jan 2026
-   3.  Liviu Chircu (@liviuchircu)         Mar 2014 - Jan 2026
-   4.  Ovidiu Sas (@ovidiusas)             Nov 2010 - Dec 2025
-   5.  Ibrahim Shahzad                     Jul 2025 - Jul 2025
-   6.  Maksym Sobolyev (@sobomax)          Jan 2021 - Apr 2025
-   7.  Alexandra Titoc                     Sep 2024 - Sep 2024
-   8.  Vlad Patrascu (@rvlad-patrascu)     May 2017 - Jun 2023
-   9.  Giedrius                            Apr 2023 - May 2023
-   10. Carsten Bock                        Mar 2022 - Apr 2022
+   1.  Razvan Crainea (@razvancrainea)     Dec 2010 - Jun 2026
+   2.  Norman Brandinger (@NormB)          Jun 2026 - Jun 2026
+   3.  Bogdan-Andrei Iancu (@bogdan-iancu) Aug 2009 - Jun 2026
+   4.  Ovidiu Sas (@ovidiusas)             Nov 2010 - Apr 2026
+   5.  Liviu Chircu (@liviuchircu)         Mar 2014 - Jan 2026
+   6.  Ibrahim Shahzad                     Jul 2025 - Jul 2025
+   7.  Maksym Sobolyev (@sobomax)          Jan 2021 - Apr 2025
+   8.  Alexandra Titoc                     Sep 2024 - Sep 2024
+   9.  Vlad Patrascu (@rvlad-patrascu)     May 2017 - Jun 2023
+   10. Giedrius                            Apr 2023 - May 2023
 
-   All remaining contributors: Nick Altmann (@nikbyte), Peter
-   Lemenkov (@lemenkov), @DMOsipov, Ionut Ionita
+   All remaining contributors: Carsten Bock, Nick Altmann
+   (@nikbyte), Peter Lemenkov (@lemenkov), @DMOsipov, Ionut Ionita
    (@ionutrazvanionita), Walter Doekes (@wdoekes), Vlad Paiu
    (@vladpaiu), Ryan Bullock (@rrb3942), Stéphane Alnet
    (@shimaore), Anca Vamanu, Henk Hesselink, Stanislaw Pitucha.

@@ -76,6 +76,7 @@
 #include "../../mod_fix.h"
 #include "../../dset.h"
 #include "../../route.h"
+#include "../../profiling.h"
 #include "../../lib/cJSON.h"
 #include "../dialog/dlg_load.h"
 #include "../rtp_relay/rtp_relay.h"
@@ -96,12 +97,12 @@
 
 #define DEFAULT_RTPE_SET_ID		0
 
-#define MI_ENABLE_RTP_ENGINE			"rtpengine_enable"
+#define MI_ENABLE_RTP_ENGINE			"enable"
 #define MI_MIN_RECHECK_TICKS		0
 #define MI_MAX_RECHECK_TICKS		(unsigned int)-1
 
-#define MI_SHOW_RTP_ENGINES			"rtpengine_show"
-#define MI_RELOAD_RTP_ENGINES		"rtpengine_reload"
+#define MI_SHOW_RTP_ENGINES			"show"
+#define MI_RELOAD_RTP_ENGINES		"reload"
 
 #define MI_RTP_ENGINE_NOT_FOUND		"RTP engine not found"
 #define MI_RTP_ENGINE_NOT_FOUND_LEN	(sizeof(MI_RTP_ENGINE_NOT_FOUND)-1)
@@ -760,20 +761,20 @@ static const mi_export_t mi_cmds[] = {
 	{ MI_ENABLE_RTP_ENGINE, 0, 0, 0, {
 		{mi_enable_rtpengine, {"url", "enable", 0}},
 		{mi_enable_rtpengine, {"url", "enable", "setid", 0}},
-		{EMPTY_MI_RECIPE}}
+		{EMPTY_MI_RECIPE}}, {0}
 	},
 	{ MI_SHOW_RTP_ENGINES, 0, 0, 0, {
 		{mi_show_rtpengines, {0}},
-		{EMPTY_MI_RECIPE}}
+		{EMPTY_MI_RECIPE}}, {0}
 	},
 	{ MI_RELOAD_RTP_ENGINES, 0, 0, 0, {
 		{mi_reload_rtpengines, {0}},
 		{mi_reload_rtpengines, {"type", 0}},
-		{EMPTY_MI_RECIPE}}
+		{EMPTY_MI_RECIPE}}, {0}
 	},
 	{ "teardown", 0, 0, 0, {
 		{mi_teardown_call, {"callid", 0}},
-		{EMPTY_MI_RECIPE}}
+		{EMPTY_MI_RECIPE}}, {0}
 	},
 	{EMPTY_MI_EXPORT}
 };
@@ -1517,7 +1518,7 @@ static mi_response_t *mi_teardown_call(const mi_params_t *params,
 	/* try to "resolve" the callid first through rtp_relay */
 	if (!rtp_relay.get_dlg_ids || rtp_relay.get_dlg_ids(&callid, &h_entry, &h_id) == 0)
 		pcallid = &callid; /* search for callid, if dialog was not found */
-	if (dlgb.terminate_dlg(pcallid, h_entry, h_id, _str("MI Termination")) < 0)
+	if (run_dlg_api(&dlgb, terminate_dlg, pcallid, h_entry, h_id, _str("MI Termination")) < 0)
 		return init_mi_error(500, MI_SSTR("Failed to terminate dialog"));
 
 	return init_mi_result_ok();
@@ -1835,6 +1836,12 @@ static inline int rtpengine_connect_node(struct rtpe_node *pnode)
 	}
 	pkg_free(hostname);
 
+	if (res->ai_addrlen > sizeof(pnode->ai_addr)) {
+		LM_ERR("RTP proxy address is too large\n");
+		freeaddrinfo(res);
+		return 0;
+	}
+
 	rtpe_socks[pnode->idx] = socket((pnode->rn_umode == 6)
 			? AF_INET6 : AF_INET, SOCK_DGRAM, 0);
 	if ( rtpe_socks[pnode->idx] == -1) {
@@ -1852,7 +1859,7 @@ static inline int rtpengine_connect_node(struct rtpe_node *pnode)
 	}
 
 	pnode->ai_addrlen = res->ai_addrlen;
-	memcpy(&(pnode->ai_addr), res->ai_addr, res->ai_addrlen);
+	memcpy(&pnode->ai_addr.s, res->ai_addr, res->ai_addrlen);
 
 	freeaddrinfo(res);
 	return 1;
@@ -2173,6 +2180,8 @@ static const char *transports[] = {
 		} \
 	} while (0)
 
+#include "rtpengine_bracket.h"
+
 static int parse_flags(struct ng_flags_parse *ng_flags, struct sip_msg *msg,
 		enum rtpe_operation *op, const char *flags_str)
 {
@@ -2203,9 +2212,29 @@ static int parse_flags(struct ng_flags_parse *ng_flags, struct sip_msg *msg,
 		else if (*e == '=') {
 			key.len = e - key.s;
 			val.s = e + 1;
-			e = strchr(val.s, ' ');
-			if (!e)
-				e = val.s + strlen(val.s);
+			if (*val.s == '[') {
+				/* bracket value: scan forward to the matching ']',
+				 * tracking nesting depth so inner brackets like
+				 * key=[a=[x y] b=[z]] are consumed as a single value */
+				int depth = 0;
+				for (e = val.s; *e; e++) {
+					if (*e == '[') depth++;
+					else if (*e == ']' && --depth == 0) { e++; break; }
+				}
+				if (depth != 0) {
+					/* set val.len before error so the error handler
+					 * can safely log the partial value with %.*s */
+					val.len = e - val.s;
+					err = "unmatched bracket in flag value";
+					goto error;
+				}
+			} else {
+				/* non-bracket value: terminate at next space */
+				e = strchr(val.s, ' ');
+				if (!e)
+					e = val.s + strlen(val.s);
+			}
+			/* e now points past the value; compute length */
 			val.len = e - val.s;
 		}
 
@@ -2480,6 +2509,18 @@ static int parse_flags(struct ng_flags_parse *ng_flags, struct sip_msg *msg,
 				goto error;
 			}
 			BCHECK(bencode_list_add(ng_flags->flags, bitem));
+		} else if (val.len >= 2 && val.s[0] == '[' && val.s[val.len - 1] == ']') {
+			/* bracket-delimited list or dictionary — strip the outer
+			 * '[' and ']' (val.s+1, val.len-2) and parse the inner
+			 * content into a bencode list or dict */
+			bitem = parse_bracket_value(val.s + 1, val.len - 2,
+					bencode_item_buffer(ng_flags->dict), 0);
+			if (!bitem) {
+				err = "failed to parse bracket value";
+				goto error;
+			}
+			BCHECK(bencode_dictionary_add_len(ng_flags->dict,
+					key.s, key.len, bitem));
 		} else {
 			bitem = bencode_str(bencode_item_buffer(ng_flags->dict), &val);
 			if (!bitem) {
@@ -2637,6 +2678,8 @@ end:
 	pkg_free(error_nt.s);
 	return ret;
 }
+
+static void pkg_free_wrapper(void *p) { pkg_free(p); }
 
 static int rtpe_function_call_prepare(bencode_buffer_t *bencbuf, struct sip_msg *msg, enum rtpe_operation op,
          struct ng_flags_parse *ng_flags, str *flags_str, str *body_in, bencode_item_t *extra_dict, char **err)
@@ -2811,8 +2854,12 @@ static int rtpe_function_call_prepare(bencode_buffer_t *bencbuf, struct sip_msg 
 		goto error;
 	}
 
+	/* flags_nt.s must remain valid until the bencode buffer is serialized
+	 * and sent, because parse_flags() stores pointers into it (via bencode_str
+	 * and bencode_dictionary_add_len) for key=value flags like media-address.
+	 * Register it for cleanup when the bencode buffer is freed. */
 	if (flags_nt.s)
-		pkg_free(flags_nt.s);
+		bencode_buffer_destroy_add(bencbuf, pkg_free_wrapper, flags_nt.s);
 
 	return 1;
 
@@ -2831,13 +2878,12 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 	str error;
 	struct rtpe_node *node, *failed_node;
 	char *cp, *err = NULL;
-	pv_value_t val;
+	pv_value_t val, socket_val;
 	struct rtpe_ignore_node *ignore_list = NULL;
-	int ret;
+	int ret, forced_socket;
 	memset(&ng_flags, 0, sizeof(ng_flags));
 	error.len = 0;
 	error.s = "";
-	pv_value_t socket_val;
 
 	/*** get & init basic stuff needed ***/
 	if (rtpe_function_call_prepare(bencbuf, msg, op, &ng_flags, flags_str, body_in, extra_dict,&err) < 0)
@@ -2850,10 +2896,10 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 	}
 
 	/*** If the spvar "sock_var" has been specified, parse it into a (socket_val) STR variable ***/
-	if (spvar) {
-		memset(&socket_val, 0, sizeof(pv_value_t));
+	memset(&socket_val, 0, sizeof(pv_value_t));
+	if (spvar)
 		pv_get_spec_value(msg, spvar, &socket_val);
-	}
+	forced_socket = socket_val.rs.len > 0;
 
 	failed_node = NULL;
 
@@ -2870,16 +2916,23 @@ static bencode_item_t *rtpe_function_call(bencode_buffer_t *bencbuf, struct sip_
 		if (spvar && (socket_val.rs.len > 0)) {
 			LM_DBG("Sending command [%d] to RTPEngine socket: [%.*s] set id: [%d]\n", op, (int)(socket_val.rs.len), (char *)(socket_val.rs.s), set->id_set);
 			node = lookup_rtpe_node(set, &socket_val.rs);
-			if (node == NULL) {
-				RTPE_STOP_READ();
-				goto error;
+			socket_val.rs.s = NULL;
+			socket_val.rs.len = 0;
+			if (node && ((node->rn_disabled = rtpe_test(node, node->rn_disabled, 0)) ||
+					rtpe_is_ignore_node(ignore_list, node))) {
+				LM_DBG("RTPEngine socket [%.*s] is not available\n",
+						node->rn_url.len, node->rn_url.s);
+				node = NULL;
 			}
 
+			if (node == NULL && op == OP_OFFER)
+				node = select_rtpe_node(ng_flags.call_id, set, ignore_list);
+		} else if (forced_socket && op != OP_OFFER) {
+			node = NULL;
 		} else if (snode && snode->s) {
 			if ((node = get_rtpe_node(snode, set)) == NULL && op == OP_OFFER)
 				node = select_rtpe_node(ng_flags.call_id, set, ignore_list);
 			snode = NULL;
-
 		} else {
 			node = select_rtpe_node(ng_flags.call_id, set, ignore_list);
 		}
@@ -3473,7 +3526,7 @@ enum async_ret_code resume_async_send_rtpe_command(int fd, struct sip_msg *msg, 
 				cp++;
 			}
 		} else {
-			LM_ERR("read reply from a RTP Ending FD %d. Cookie does NOT match (%.*s <> %.*s)\n", 
+			LM_ERR("read reply from a RTP Ending FD %d. Cookie does NOT match (%.*s <> %.*s)\n",
 			fd, cookielen - 1, param->cookie, cookielen - 1, buf);
 			goto error;
 		}
@@ -3660,7 +3713,7 @@ static int start_async_send_rtpe_command(struct rtpe_node *node, bencode_item_t 
 			LM_ERR("can't create socket %d \n",errno);
 			goto badproxy;
 		}
-		if (connect(fd, &(node->ai_addr), node->ai_addrlen) < 0) {
+		if (connect(fd, &node->ai_addr.s, node->ai_addrlen) < 0) {
 			LM_ERR("can't connect to RTP proxy %s (%d:%s)\n",node->rn_url.s,errno,strerror(errno));
 			close(fd);
 			goto badproxy;
@@ -3746,7 +3799,7 @@ static int rtpe_function_call_async(struct sip_msg *msg, async_ctx *ctx, str *fl
 	LM_DBG("async proxy reply: %d\n", ret);
 
 	if (read_fd == ASYNC_NO_IO) {
-		ctx->resume_f = NULL;
+		ASYNC_CLEAR_RESUME_F(ctx);
 		ctx->resume_param = NULL;
 		bencode_buffer_free(bencbuf);
 		pkg_free(bencbuf);
@@ -3773,7 +3826,7 @@ static int rtpe_function_call_async(struct sip_msg *msg, async_ctx *ctx, str *fl
 	param->bpvar = bpvar;
 	param->spvar = spvar;
 
-	ctx->resume_f = resume_async_send_rtpe_command;
+	ASYNC_SET_RESUME_F(ctx, resume_async_send_rtpe_command);
 	ctx->timeout_f = timeout_async_send_rtpe_command;
 	ctx->resume_param = param;
 
@@ -4771,6 +4824,10 @@ static void rtpengine_raise_event(int sender, void *p)
 				break;
 			default:
 				jstring.s = cJSON_PrintUnformatted(param);
+				if (!jstring.s) {
+					LM_ERR("cJSON_PrintUnformatted failed\n");
+					break;
+				}
 				jstring.len = strlen(jstring.s);
 				err = evi_param_add_str(eparams, &name, &jstring);
 				cJSON_PurgeString(jstring.s);
@@ -4798,35 +4855,46 @@ static int rtpengine_io_callback(int fd, void *fs, int was_timeout)
 	char *p;
 	char buffer[RTPENGINE_DGRAM_BUF];
 
+	profiling_proc_start( LEVEL_EXTRAPROCS, 1);
+
 	do
 		ret = read(fd, buffer, RTPENGINE_DGRAM_BUF);
 	while (ret == -1 && errno == EINTR);
 	if (ret < 0) {
 		LM_ERR("problem reading on socket %s:%u (%s:%d)\n",
 				rtpengine_notify_sock.s, rtpengine_notify_port, strerror(errno), errno);
-		return -1;
+		goto err;
 	}
 
 	if (!evi_probe_event(rtpengine_notify_event)) {
 		LM_DBG("nothing to do - nobody is listening!\n");
-		return 0;
+		goto done;
 	}
 
 	p = shm_malloc(ret + 1);
 	if (!p) {
 		/* coverity[string_null] - false positive CID #211356 */
 		LM_ERR("could not allocate %d for buffer %.*s\n", ret, ret, buffer);
-		return -1;
+		goto err;
 	}
 	memcpy(p, buffer, ret);
 	p[ret] = '\0';
+
+	profiling_proc_enter( LEVEL_EXTRAPROCS, ss_merge256("RTPE_CB ",p), 0);
 
 	LM_INFO("dispatching buffer: %s\n", p);
 	if (ipc_dispatch_rpc(rtpengine_raise_event, p) < 0) {
 		LM_ERR("could not dispatch notification job!\n");
 		shm_free(p);
 	}
+
+	profiling_proc_exit( LEVEL_EXTRAPROCS, "RTPE_CB", 0);
+	profiling_proc_end( LEVEL_EXTRAPROCS, 0 );
+done:
 	return 0;
+err:
+	profiling_proc_end( LEVEL_EXTRAPROCS, -1 );
+	return -1;
 }
 
 static void rtpengine_notify_process(int rank)
@@ -5023,6 +5091,7 @@ static int rtpengine_api_offer(struct rtp_relay_session *sess,
 			fill_rtpengine_node(server, &val.rs);
 		else
 			LM_ERR("could not retrieve the value of the used rtpengine!\n");
+		pv_set_value(sess->msg, &media_pvar, EQ_T, NULL);
 	}
 	return ret;
 }

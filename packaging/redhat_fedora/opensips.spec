@@ -41,6 +41,10 @@
 %global _with_opentelemetry 1
 %endif
 
+%if 0%{?rhel} >= 10 || 0%{?fedora} > 41
+%global _with_wolfssl_stir_shaken 1
+%endif
+
 %global EXCLUDE_MODULES %{!?_with_auth_jwt:auth_jwt} %{!?_with_cachedb_cassandra:cachedb_cassandra} %{!?_with_cachedb_couchbase:cachedb_couchbase} %{!?_with_cachedb_dynamodb:cachedb_dynamodb} %{!?_with_event_sqs:event_sqs} %{!?_with_cachedb_mongodb:cachedb_mongodb} %{!?_with_cachedb_redis:cachedb_redis} %{!?_with_db_oracle:db_oracle} %{!?_with_osp:osp} %{!?_with_sngtc:sngtc} %{!?_with_aaa_diameter:aaa_diameter aka_av_diameter} %{?_without_db_perlvdb:db_perlvdb} %{?_without_snmpstats:snmpstats} %{!?_with_wolfssl:tls_wolfssl} %{!?_with_opentelemetry:opentelemetry} launch_darkly http2d rtp.io
 
 Summary:  Very fast and configurable SIP server
@@ -97,7 +101,6 @@ BuildRequires:  systemd-units
 %endif
 BuildRequires:  libxslt
 BuildRequires:  lynx
-BuildRequires:  ncurses-devel
 BuildRequires:  json-c-devel
 
 #Initscripts
@@ -130,7 +133,7 @@ Module, Registrar and User Location, Load Balaning/Dispatching/LCR,
 XMLRPC Interface.
 .
 This package contains the main OpenSIPS binary along with the principal modules
-and support binaries including opensipsmc configuration tool.
+and support binaries.
 
 %if 0%{?_with_auth_jwt:1}
 %package  auth-jwt-module
@@ -855,8 +858,13 @@ This package provides the SQLite database schema files for OpenSIPS.
 Summary:  STIR/SHAKEN support for OpenSIPS
 Group:    System Environment/Daemons
 Requires: %{name} = %{version}-%{release}
+%if 0%{?_with_wolfssl_stir_shaken}
+Requires: wolfssl
+BuildRequires: wolfssl-devel
+%else
 Requires: openssl
 BuildRequires: openssl-devel
+%endif
 
 %description  stir-shaken-module
 OpenSIPS is a very fast and flexible SIP (RFC3261)
@@ -1007,14 +1015,14 @@ This package provides the SIP to XMPP IM translator module for OpenSIPS.
 %setup -q -n %{name}-%{version}
 
 %build
-LOCALBASE=/usr NICER=0 CFLAGS="%{optflags}" LDFLAGS="%{?__global_ldflags}" %{?_with_python3:PYTHON=python3} %{?_with_db_oracle:ORAHOME="$ORACLE_HOME"} %{__make} all modules-readme %{?_smp_mflags} TLS=1 \
+LOCALBASE=/usr NICER=0 CFLAGS="%{optflags}" LDFLAGS="%{?__global_ldflags}" %{?_with_python3:PYTHON=python3} %{?_with_db_oracle:ORAHOME="$ORACLE_HOME"} %{!?_with_wolfssl_stir_shaken:STIR_SHAKEN_OPENSSL=true} %{__make} all modules-readme %{?_smp_mflags} TLS=1 \
   exclude_modules="%EXCLUDE_MODULES" \
   cfg_target=%{_sysconfdir}/opensips/ \
   modules_prefix=%{buildroot}%{_prefix} \
   modules_dir=%{_lib}/%{name}/modules
 
 %install
-%{__make} install TLS=1 LIBDIR=%{_lib} \
+%{__make} install TLS=1 LIBDIR=%{_lib} %{!?_with_wolfssl_stir_shaken:STIR_SHAKEN_OPENSSL=true} \
   exclude_modules="%EXCLUDE_MODULES" \
   basedir=%{buildroot} prefix=%{_prefix} \
   cfg_prefix=%{buildroot} \
@@ -1041,6 +1049,8 @@ mv %{buildroot}/%{_sysconfdir}/opensips/tls/README \
   %{buildroot}/%{_docdir}/opensips/README.tls
 rm -f %{buildroot}%{_docdir}/opensips/INSTALL
 mv %{buildroot}/%{_docdir}/opensips docdir
+ln -sf mi_xmlrpc.so \
+  %{buildroot}/%{_libdir}/opensips/modules/mi_xmlrpc_ng.so
 
 %if 0%{?fedora} > 16 || 0%{?rhel} > 6
 # install systemd files
@@ -1086,7 +1096,6 @@ fi
 
 %files
 %{_sbindir}/opensips
-%{_sbindir}/osipsconfig
 
 %attr(750,%{name},%{name}) %dir %{_sysconfdir}/opensips
 %attr(750,%{name},%{name}) %dir %{_sysconfdir}/opensips/tls
@@ -1126,10 +1135,11 @@ fi
 %dir %{_datadir}/opensips/
 %dir %{_datadir}/opensips/dbtext/
 %dir %{_datadir}/opensips/dbtext/opensips/
-%dir %{_datadir}/opensips/menuconfig_templates/
-
+%dir %{_datadir}/opensips/examples/
+%dir %{_datadir}/opensips/examples/templates/
 %{_datadir}/opensips/dbtext/opensips/*
-%{_datadir}/opensips/menuconfig_templates/*.m4
+%{_datadir}/opensips/examples/templates/*.m4
+%{_datadir}/opensips/examples/templates/README.md
 
 %{_mandir}/man5/opensips.cfg.5*
 %{_mandir}/man8/opensips.8*
@@ -1703,8 +1713,9 @@ fi
 %doc docdir/README.xml
 
 %files xmlrpc-module
+%{_libdir}/opensips/modules/mi_xmlrpc.so
 %{_libdir}/opensips/modules/mi_xmlrpc_ng.so
-%doc docdir/README.mi_xmlrpc_ng
+%doc docdir/README.mi_xmlrpc
 
 %files xmpp-module
 %{_libdir}/opensips/modules/xmpp.so
@@ -2120,4 +2131,3 @@ fi
 
 * Tue Jul 24 2007 Peter Lemenkov <lemenkov@gmail.com> 1.2.1-1
 - Initial spec.
-

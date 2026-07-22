@@ -23,14 +23,14 @@ Regex Module
 
         1.4. Exported Functions
 
-              1.4.1. pcre_match (string, pcre_regex)
+              1.4.1. pcre_match (string, pcre_regex [, match])
               1.4.2. pcre_match_group (string [, group])
 
         1.5. Exported MI Functions
 
-              1.5.1. regex_reload
-              1.5.2. regex_match
-              1.5.3. regex_match_group
+              1.5.1. regex:reload
+              1.5.2. regex:match
+              1.5.3. regex:match_group
 
         1.6. Installation and Running
 
@@ -210,16 +210,20 @@ modparam("regex", "pcre_extended", 1)
 
 1.4. Exported Functions
 
-1.4.1.  pcre_match (string, pcre_regex)
+1.4.1.  pcre_match (string, pcre_regex [, match])
 
    Matches the given string parameter against the regular
    expression pcre_regex, which is compiled into a PCRE object.
-   Returns TRUE if it matches, FALSE otherwise.
+   Returns TRUE if it matches, FALSE otherwise. When the optional
+   match parameter is provided, it is set to the matched part of
+   the string, or cleared if there is no match.
 
    Meaning of the parameters is as follows:
      * string - String to compare.
      * pcre_regex (string) - Regular expression to be compiled in
        a PCRE object.
+     * match (var, optional) - Writable pseudo-variable where the
+       matched part of the string is stored.
 
    NOTE: To use the "end of line" symbol '$' in the pcre_regex
    parameter use '$$'.
@@ -266,28 +270,32 @@ if (pcre_match_group($rU, 2)) {
 
 1.5. Exported MI Functions
 
-1.5.1.  regex_reload
+1.5.1.  regex:reload
+
+   Replaces obsolete MI command: regex_reload.
 
    Causes regex module to re-read the content of the text file and
    re-compile the regular expressions. The number of groups in the
    file can be modified safely.
 
-   Name: regex_reload
+   Name: regex:reload
 
    Parameters: none
 
    MI FIFO Command Format:
 ...
-opensips-cli -x mi regex_reload
+opensips-cli -x mi regex:reload
 ...
 
-1.5.2.  regex_match
+1.5.2.  regex:match
+
+   Replaces obsolete MI command: regex_match.
 
    Matches the given string parameter against the regular
    expression pcre_regex. Returns "Match" if it matches, "Not
    Match" otherwise.
 
-   Name: regex_match
+   Name: regex:match
 
    Parameters:
      * string
@@ -295,20 +303,22 @@ opensips-cli -x mi regex_reload
 
    MI FIFO Command Format:
 ...
-opensips-cli -x mi regex_match string="1234" pcre_regex="^1234$"
+opensips-cli -x mi regex:match string="1234" pcre_regex="^1234$"
 "Match"
-opensips-cli -x mi regex_match string="1234" pcre_regex="^1235$"
+opensips-cli -x mi regex:match string="1234" pcre_regex="^1235$"
 "Not Match"
 ...
 
-1.5.3.  regex_match_group
+1.5.3.  regex:match_group
+
+   Replaces obsolete MI command: regex_match_group.
 
    It uses the groups readed from the text file to match the given
    string parameter against the compiled regular expression in
    group number group. Returns "Match" if it matches, "Not Match"
    otherwise.
 
-   Name: regex_match_group
+   Name: regex:match_group
 
    Parameters:
      * string
@@ -316,9 +326,9 @@ opensips-cli -x mi regex_match string="1234" pcre_regex="^1235$"
 
    MI FIFO Command Format:
 ...
-opensips-cli -x mi regex_match_group string="1234" group="0"
+opensips-cli -x mi regex:match_group string="1234" group="0"
 "Match"
-opensips-cli -x mi regex_match_group string="1234" group="1"
+opensips-cli -x mi regex:match_group string="1234" group="1"
 "Not Match"
 ...
 
@@ -428,16 +438,16 @@ Chapter 2. Contributors
    Table 2.1. Top contributors by DevScore^(1), authored
    commits^(2) and lines added/removed^(3)
      Name DevScore Commits Lines ++ Lines --
-   1. Razvan Crainea (@razvancrainea) 15 13 45 28
+   1. Razvan Crainea (@razvancrainea) 25 21 163 72
    2. Iñaki Baz Castillo 15 3 1242 2
    3. Liviu Chircu (@liviuchircu) 12 10 25 42
-   4. Vlad Patrascu (@rvlad-patrascu) 9 6 63 88
-   5. Bogdan-Andrei Iancu (@bogdan-iancu) 8 6 12 7
-   6. MonkeyTester 6 3 188 14
-   7. Norman Brandinger (@NormB) 5 3 4 4
-   8. Steve Ayre 4 2 64 48
-   9. Sergio Gutierrez 3 1 19 1
-   10. Ovidiu Sas (@ovidiusas) 3 1 13 11
+   4. Ovidiu Sas (@ovidiusas) 11 3 717 24
+   5. Vlad Patrascu (@rvlad-patrascu) 9 6 63 88
+   6. Bogdan-Andrei Iancu (@bogdan-iancu) 8 6 12 7
+   7. MonkeyTester 6 3 188 14
+   8. Norman Brandinger (@NormB) 5 3 4 4
+   9. Steve Ayre 4 2 64 48
+   10. Sergio Gutierrez 3 1 19 1
 
    All remaining contributors: Anca Vamanu, Maksym Sobolyev
    (@sobomax), Ken Rice, Marius Zbihlei.
@@ -450,7 +460,7 @@ Chapter 2. Contributors
    merge commits. Regarding imported patches/code, we do our best
    to count the work on behalf of the proper owner, as per the
    "fix_authors" and "mod_renames" arrays in
-   opensips/doc/build-contrib.sh. If you identify any
+   opensips/docs/build-contrib.sh. If you identify any
    patches/commits which do not get properly attributed to you,
    please submit a pull request which extends "fix_authors" and/or
    "mod_renames".
@@ -462,16 +472,16 @@ Chapter 2. Contributors
 
    Table 2.2. Most recently active contributors^(1) to this module
                       Name                   Commit Activity
-   1.  Razvan Crainea (@razvancrainea)     Sep 2011 - Dec 2025
-   2.  Steve Ayre                          Sep 2025 - Sep 2025
-   3.  Ken Rice                            Sep 2025 - Sep 2025
-   4.  MonkeyTester                        Aug 2023 - Aug 2023
-   5.  Norman Brandinger (@NormB)          Apr 2023 - Apr 2023
-   6.  Maksym Sobolyev (@sobomax)          Feb 2023 - Feb 2023
-   7.  Vlad Patrascu (@rvlad-patrascu)     May 2017 - Apr 2019
-   8.  Bogdan-Andrei Iancu (@bogdan-iancu) Feb 2009 - Apr 2019
-   9.  Liviu Chircu (@liviuchircu)         Mar 2014 - Nov 2018
-   10. Ovidiu Sas (@ovidiusas)             Jan 2013 - Jan 2013
+   1.  Ovidiu Sas (@ovidiusas)             Jan 2013 - Jul 2026
+   2.  Razvan Crainea (@razvancrainea)     Sep 2011 - Jun 2026
+   3.  Steve Ayre                          Sep 2025 - Sep 2025
+   4.  Ken Rice                            Sep 2025 - Sep 2025
+   5.  MonkeyTester                        Aug 2023 - Aug 2023
+   6.  Norman Brandinger (@NormB)          Apr 2023 - Apr 2023
+   7.  Maksym Sobolyev (@sobomax)          Feb 2023 - Feb 2023
+   8.  Vlad Patrascu (@rvlad-patrascu)     May 2017 - Apr 2019
+   9.  Bogdan-Andrei Iancu (@bogdan-iancu) Feb 2009 - Apr 2019
+   10. Liviu Chircu (@liviuchircu)         Mar 2014 - Nov 2018
 
    All remaining contributors: Marius Zbihlei, Iñaki Baz Castillo,
    Anca Vamanu, Sergio Gutierrez.
@@ -483,9 +493,10 @@ Chapter 3. Documentation
 
 3.1. Contributors
 
-   Last edited by: MonkeyTester, Vlad Patrascu (@rvlad-patrascu),
-   Razvan Crainea (@razvancrainea), Liviu Chircu (@liviuchircu),
-   Bogdan-Andrei Iancu (@bogdan-iancu), Iñaki Baz Castillo.
+   Last edited by: Razvan Crainea (@razvancrainea), Ovidiu Sas
+   (@ovidiusas), MonkeyTester, Vlad Patrascu (@rvlad-patrascu),
+   Liviu Chircu (@liviuchircu), Bogdan-Andrei Iancu
+   (@bogdan-iancu), Iñaki Baz Castillo.
 
    Documentation Copyrights:
 

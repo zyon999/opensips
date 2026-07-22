@@ -37,13 +37,31 @@
 #define _GNU_SOURCE
 #include <time.h>
 
+#ifdef STIR_SHAKEN_OPENSSL
 #include <openssl/x509.h>
+#else
+#include <wolfssl/options.h>
+#include <wolfssl/ssl.h>
+#include <wolfssl/openssl/x509.h>
+#endif
+
 
 #undef _GNU_SOURCE
 
+#ifdef STIR_SHAKEN_OPENSSL
 #include <openssl/x509v3.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
+#include <openssl/ecdsa.h>
+#else
+#include <wolfssl/openssl/x509v3.h>
+#include <wolfssl/openssl/pem.h>
+#include <wolfssl/openssl/err.h>
+#include <wolfssl/openssl/ssl.h>
+#include <wolfssl/openssl/ecdsa.h>
+#endif
+
 #include <stdlib.h>
 
 #include "../../dprint.h"
@@ -141,7 +159,7 @@ static int e164_max_length = 15;
 
 static int require_date_hdr = 1;
 
-static int tn_authlist_nid;
+static ASN1_OBJECT *tn_authlist_obj;
 
 static int parsed_ctx_idx =-1;
 
@@ -202,13 +220,13 @@ static const cmd_export_t cmds[] = {
  * Exported MI functions
  */
 static const mi_export_t mi_cmds[] = {
-	{ "stir_shaken_ca_reload", "Stir shaken ca reloader", 0, 0, {
+	{ "ca_reload", "Stir shaken ca reloader", 0, 0, {
 		{mi_stir_shaken_ca_reload, {0}},
-		{EMPTY_MI_RECIPE}}
+		{EMPTY_MI_RECIPE}}, {"stir_shaken_ca_reload", 0}
 	},
-	{ "stir_shaken_crl_reload", "Stir shaken crl reloader", 0, 0, {
+	{ "crl_reload", "Stir shaken crl reloader", 0, 0, {
 		{mi_stir_shaken_crl_reload, {0}},
-		{EMPTY_MI_RECIPE}}
+		{EMPTY_MI_RECIPE}}, {"stir_shaken_crl_reload", 0}
 	},
 	{EMPTY_MI_EXPORT}
 };
@@ -254,6 +272,27 @@ static int verify_callback(int ok, X509_STORE_CTX *ctx)
 	return ok;
 }
 
+static int ss_store_set_default_paths(X509_STORE *x509_store)
+{
+#ifdef WOLFSSL_VERSION
+	return wolfSSL_X509_STORE_set_default_paths(x509_store);
+#else
+	return X509_STORE_set_default_paths(x509_store);
+#endif
+}
+
+static void ss_store_set_verify_cb(X509_STORE *x509_store,
+	int (*verify_cb)(int, X509_STORE_CTX *))
+{
+#ifdef WOLFSSL_VERSION
+	/* Older wolfSSL builds may not provide store-level callback setter. */
+	(void)x509_store;
+	(void)verify_cb;
+#else
+	X509_STORE_set_verify_cb_func(x509_store, verify_cb);
+#endif
+}
+
 // called during mod_init
 static int init_cert_validation(void)
 {
@@ -262,14 +301,14 @@ static int init_cert_validation(void)
 		LM_ERR("Failed to create X509_STORE_CTX object\n");
 		return -1;
 	}
-	X509_STORE_set_verify_cb_func(store, verify_callback);
+	ss_store_set_verify_cb(store, verify_callback);
 
 	if (ca_list || ca_dir) {
 		if (X509_STORE_load_locations(store, ca_list, ca_dir) != 1) {
 			LM_ERR("Failed to load trusted CAs\n");
 			return -1;
 		}
-		if (X509_STORE_set_default_paths(store) != 1) {
+		if (ss_store_set_default_paths(store) != 1) {
 			LM_ERR("Failed to load the system-wide CA certificates\n");
 			return -1;
 		}
@@ -301,7 +340,7 @@ static int init_cert_ca_reload(void)
 		LM_ERR("Failed to create X509_STORE_CTX object\n");
 		return -1;
 	}
-	X509_STORE_set_verify_cb_func(store, verify_callback);
+	ss_store_set_verify_cb(store, verify_callback);
 
 	/* check if ca_list param is set */
 	if (!ca_list) {
@@ -321,7 +360,7 @@ static int init_cert_ca_reload(void)
 			LM_ERR("Failed to load trusted CAs\n");
 			return -4;
 		}
-		if (X509_STORE_set_default_paths(store) != 1) {
+		if (ss_store_set_default_paths(store) != 1) {
 			LM_ERR("Failed to load the system-wide CA certificates\n");
 			return -5;
 		}
@@ -338,7 +377,7 @@ static int init_cert_crl_reload(void)
 		LM_ERR("Failed to create X509_STORE_CTX object\n");
 		return -1;
 	}
-	X509_STORE_set_verify_cb_func(store, verify_callback);
+	ss_store_set_verify_cb(store, verify_callback);
 
 	/* check if crl_list param is set */
 	if (!crl_list) {
@@ -381,10 +420,9 @@ static void parsed_ctx_free(void *param)
 
 static int mod_init(void)
 {
-	tn_authlist_nid = OBJ_create(TN_AUTH_LIST_OID,
-		TN_AUTH_LIST_SN, TN_AUTH_LIST_LN);
-	if (tn_authlist_nid == NID_undef) {
-		LM_ERR("Failed to create new openssl object\n");
+	tn_authlist_obj = OBJ_txt2obj(TN_AUTH_LIST_OID, 1);
+	if (!tn_authlist_obj) {
+		LM_ERR("Failed to create TNAuthList object identifier\n");
 		return -1;
 	}
 
@@ -397,6 +435,9 @@ static int mod_init(void)
 }
 
 static void mod_destroy(void) {
+	if (tn_authlist_obj)
+		ASN1_OBJECT_free(tn_authlist_obj);
+
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 	OBJ_cleanup();
 #endif
@@ -521,9 +562,9 @@ static int add_disengagement_token(struct sip_msg *msg, str *token)
 {
 
 	#define DISENGAGEMENT_HDR_S		"P-Identity-Bypass: "
-	#define DISENGAGEMENT_HDR_L		sizeof(DISENGAGEMENT_HDR_S)
-	
-	char *buf;
+	#define DISENGAGEMENT_HDR_L		(sizeof(DISENGAGEMENT_HDR_S)-1)
+
+	char *buf, *p;
 	unsigned int len;
 	struct lump* anchor;
 
@@ -547,7 +588,7 @@ static int add_disengagement_token(struct sip_msg *msg, str *token)
 	}
 
 	/* calculate len (header + token + crlf) */
-	len = strlen(DISENGAGEMENT_HDR_S) + strlen(token->s) + strlen(CRLF);
+	len = DISENGAGEMENT_HDR_L + token->len + CRLF_LEN;
 	/* alloc pkg memory */
 	buf= pkg_malloc(len);
 	if (!buf) {
@@ -555,12 +596,13 @@ static int add_disengagement_token(struct sip_msg *msg, str *token)
 		return -1;
 	}
 
-	// push header in the buffer
-	strcpy(buf, DISENGAGEMENT_HDR_S);
-	// push token after the header
-	strcat(buf, token->s);
-	// push "\r\n" after the token
-	strcat(buf, CRLF);
+	p = buf;
+	memcpy(p, DISENGAGEMENT_HDR_S, DISENGAGEMENT_HDR_L);
+	p += DISENGAGEMENT_HDR_L;
+	memcpy(p, token->s, token->len);
+	p += token->len;
+	memcpy(p, CRLF, CRLF_LEN);
+	p += CRLF_LEN;
 
 	/* insert buf at the end of previous headers */
 	if (insert_new_lump_after(anchor, buf, len, 0) == 0) {
@@ -574,8 +616,8 @@ static int add_disengagement_token(struct sip_msg *msg, str *token)
 
 static int check_cert_validity(time_t *timestamp, X509 *cert)
 {
-	ASN1_STRING *notBeforeSt;
-	ASN1_STRING *notAfterSt;
+	const ASN1_TIME *notBeforeSt;
+	const ASN1_TIME *notAfterSt;
 
 	notBeforeSt = X509_get_notBefore(cert);
 	notAfterSt = X509_get_notAfter(cert);
@@ -589,6 +631,24 @@ static int check_cert_validity(time_t *timestamp, X509 *cert)
 		return 1;
 
 	return 0;
+}
+
+static int ss_bn2binpad(const BIGNUM *a, unsigned char *to, int tolen)
+{
+	int bnlen, padlen;
+
+	bnlen = BN_num_bytes(a);
+
+	if (tolen < bnlen)
+		return -1;
+
+	padlen = tolen - bnlen;
+	memset(to, 0, padlen);
+
+	if (BN_bn2bin(a, to + padlen) == 0)
+		return -1;
+
+	return tolen;
 }
 
 static char *build_pport_hdr_json(str *cr_url)
@@ -830,6 +890,7 @@ static int get_orig_tn_from_msg(struct sip_msg *msg, str *orig_tn)
 	}
 
 	*orig_tn = parsed_uri.user;
+	trim_user_params(orig_tn);
 
 	return 0;
 }
@@ -861,36 +922,21 @@ static int get_dest_tn_from_msg(struct sip_msg *msg, str *dest_tn)
 	}
 
 	*dest_tn = parsed_uri.user;
+	trim_user_params(dest_tn);
 
 	return 0;
 }
 
-/* compatibility function for openssl versions lower than 1.1.0 */
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-int BN_bn2binpad(const BIGNUM *a, unsigned char *to, int tolen)
+static void ss_ecdsa_sig_get0(const ECDSA_SIG *sig, const BIGNUM **pr,
+	const BIGNUM **ps)
 {
-	int bnlen, padlen;
-
-	bnlen = BN_num_bytes(a);
-
-	if (tolen < bnlen)
-		return -1;
-
-	padlen = tolen - bnlen;
-	memset(to, 0, padlen);
-
-	if (BN_bn2bin(a, to + padlen) == 0)
-		return -1;
-
-	return tolen;
-}
-
-void ECDSA_SIG_get0(const ECDSA_SIG *sig, const BIGNUM **pr, const BIGNUM **ps)
-{
+#if !defined(WOLFSSL_VERSION) && OPENSSL_VERSION_NUMBER >= 0x10100000L
+	ECDSA_SIG_get0(sig, pr, ps);
+#else
 	*pr = sig->r;
 	*ps = sig->s;
-}
 #endif
+}
 
 static str *build_identity_hf(EVP_PKEY *pkey,
 	time_t date_ts, str *attest, str *cr_url, str *orig_tn,
@@ -957,13 +1003,13 @@ static str *build_identity_hf(EVP_PKEY *pkey,
 	pkg_free(der_sig_buf.s);
 	der_sig_buf.s = NULL;
 
-	ECDSA_SIG_get0(sig, &r, &s);
-	len = BN_bn2binpad(r, raw_sig_buf, R_S_INT_LEN);
+	ss_ecdsa_sig_get0(sig, &r, &s);
+	len = ss_bn2binpad(r, raw_sig_buf, R_S_INT_LEN);
 	if (len < 0 || len != R_S_INT_LEN) {
 		LM_ERR("Failed to convert R integer into binay represantation\n");
 		goto error;
 	}
-	len = BN_bn2binpad(s, raw_sig_buf + R_S_INT_LEN,
+	len = ss_bn2binpad(s, raw_sig_buf + R_S_INT_LEN,
 		R_S_INT_LEN);
 	if (len < 0 || len != R_S_INT_LEN) {
 		LM_ERR("Failed to convert S integer into binay represantation\n");
@@ -1029,9 +1075,18 @@ error:
 	return NULL;
 }
 
+static X509_INFO *ss_sk_X509_INFO_shift(STACK_OF(X509_INFO) *sk)
+{
+#ifdef WOLFSSL_VERSION
+	return sk_X509_INFO_pop(sk);
+#else
+	return sk_X509_INFO_shift(sk);
+#endif
+}
+
 static int load_cert(X509 **cert, STACK_OF(X509) **certchain, str *cert_buf)
 {
-	BIO *cbio;
+	BIO *cbio, *chainbio;
 	STACK_OF(X509) *stack;
 	STACK_OF(X509_INFO) *sk;
 	X509_INFO *xi;
@@ -1063,9 +1118,8 @@ static int load_cert(X509 **cert, STACK_OF(X509) **certchain, str *cert_buf)
 			SS_UNLOCK;
 			return -1;
 		}
-
-		sk = PEM_X509_INFO_read_bio(cbio, NULL, NULL, NULL);
-		if (!sk) {
+		chainbio = BIO_new_mem_buf((void*)cert_buf->s,cert_buf->len);
+		if (!chainbio) {
 			LM_ERR("error reading certificate stack\n");
 			X509_free(*cert);
 			*cert = NULL;
@@ -1075,8 +1129,20 @@ static int load_cert(X509 **cert, STACK_OF(X509) **certchain, str *cert_buf)
 			return -1;
 		}
 
+		sk = PEM_X509_INFO_read_bio(chainbio, NULL, NULL, NULL);
+		if (!sk) {
+			LM_ERR("error reading certificate stack\n");
+			X509_free(*cert);
+			*cert = NULL;
+			BIO_free(chainbio);
+			BIO_free(cbio);
+			sk_X509_free(stack);
+			SS_UNLOCK;
+			return -1;
+		}
+
 		while (sk_X509_INFO_num(sk)) {
-			xi = sk_X509_INFO_shift(sk);
+			xi = ss_sk_X509_INFO_shift(sk);
 			if (xi->x509 != NULL) {
 				sk_X509_push(stack, xi->x509);
 				xi->x509 = NULL;
@@ -1089,6 +1155,7 @@ static int load_cert(X509 **cert, STACK_OF(X509) **certchain, str *cert_buf)
 		else
 			*certchain = stack;
 
+		BIO_free(chainbio);
 		BIO_free(cbio);
 		sk_X509_INFO_free(sk);
 	} else {
@@ -1692,10 +1759,44 @@ static int check_passport_claims(struct parsed_identity *parsed)
 static int validate_certificate(X509 *cert, STACK_OF(X509) *certchain)
 {
 	X509_STORE_CTX *verify_ctx;
+	X509_EXTENSION *ext;
+	ASN1_OBJECT *ext_obj;
+	char ext_oid[128];
+	int ext_count, i, has_tn_authlist = 0;
+	int tn_authlist_nid;
 	int rc;
 
 	/* check the TN Authorization list extension */
-	if (X509_get_ext_by_NID(cert, tn_authlist_nid, -1) == -1) {
+	tn_authlist_nid = tn_authlist_obj ? OBJ_obj2nid(tn_authlist_obj) : NID_undef;
+	if (tn_authlist_nid != NID_undef &&
+		X509_get_ext_by_NID(cert, tn_authlist_nid, -1) != -1) {
+		has_tn_authlist = 1;
+	} else {
+		/*
+		 * WolfSSL may fail object-based lookup for this custom OID.
+		 * Fallback to direct OID-string matching over all extensions.
+		 */
+		ext_count = X509_get_ext_count(cert);
+		for (i = 0; i < ext_count; i++) {
+			ext = X509_get_ext(cert, i);
+			if (!ext)
+				continue;
+
+			ext_obj = X509_EXTENSION_get_object(ext);
+			if (!ext_obj)
+				continue;
+
+			if (OBJ_obj2txt(ext_oid, sizeof(ext_oid), ext_obj, 1) <= 0)
+				continue;
+
+			if (strcmp(ext_oid, TN_AUTH_LIST_OID) == 0) {
+				has_tn_authlist = 1;
+				break;
+			}
+		}
+	}
+
+	if (!has_tn_authlist) {
 		LM_INFO("The certificate is missing the TnAuthList extension\n");
 		return -8;
 	}
@@ -1711,6 +1812,7 @@ static int validate_certificate(X509 *cert, STACK_OF(X509) *certchain)
 		LM_ERR("Error initializing verification context\n");
 		return -1;
 	}
+	X509_STORE_CTX_set_verify_cb(verify_ctx, verify_callback);
 
 	rc = X509_verify_cert(verify_ctx);
 
@@ -1783,7 +1885,7 @@ static int verify_signature(X509 *cert,
 
 	sig = ECDSA_SIG_new();
 
-	#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	#if defined(WOLFSSL_VERSION) || OPENSSL_VERSION_NUMBER < 0x10100000L
 	/* R and S components are already initialised by ECDSA_SIG_new() so
 	 * they should be passed to BN_bin2bn() */
 	r_int = sig->r;
@@ -1803,7 +1905,7 @@ static int verify_signature(X509 *cert,
 		goto error;
 	}
 
-	#if OPENSSL_VERSION_NUMBER > 0x10100000L
+	#if !defined(WOLFSSL_VERSION) && OPENSSL_VERSION_NUMBER >= 0x10100000L
 	/* set the R and S components as they were not initialised by ECDSA_SIG_new() */
 	ECDSA_SIG_set0(sig, r_int, s_int);
 	#endif

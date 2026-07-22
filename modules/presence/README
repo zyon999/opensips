@@ -49,9 +49,9 @@ Presence Module
 
               1.6.1. refresh_watchers
               1.6.2. cleanup
-              1.6.3. pres_phtable_list
+              1.6.3. presence:phtable_list
               1.6.4. subs_phtable_list
-              1.6.5. pres_expose
+              1.6.5. presence:expose
 
         1.7. Exported Events
 
@@ -693,16 +693,18 @@ opensips-cli -x mi refresh_watchers sip:11@192.168.2.132 presence 1
    MI FIFO Command Format:
 opensips-cli -x mi cleanup
 
-1.6.3.  pres_phtable_list
+1.6.3.  presence:phtable_list
+
+   Replaces obsolete MI command: pres_phtable_list.
 
    Lists all the presentity records.
 
-   Name: pres_phtable_list
+   Name: presence:phtable_list
 
    Parameters: none
 
    MI FIFO Command Format:
-opensips-cli -x mi pres_phtable_list
+opensips-cli -x mi presence:phtable_list
 
 1.6.4.  subs_phtable_list
 
@@ -719,13 +721,15 @@ opensips-cli -x mi pres_phtable_list
 opensips-cli -x mi subs_phtable_list sip:222@domain2.com sip:user_1@exam
 ple.com
 
-1.6.5.  pres_expose
+1.6.5.  presence:expose
+
+   Replaces obsolete MI command: pres_expose.
 
    Exposes in the script, by rasing an E_PRESENCE_EXPOSED event,
    all the presentities of a specific event that match a specified
    filter.
 
-   Name: pres_expose
+   Name: presence:expose
 
    Parameters:
      * event - the desired presence event.
@@ -735,7 +739,7 @@ ple.com
        all presentities for that event are exposed.
 
    MI FIFO Command Format:
-opensips-cli -x mi pres_expose presence ^sip:10\.0\.5\.[0-9]*
+opensips-cli -x mi presence:expose presence ^sip:10\.0\.5\.[0-9]*
 
 1.7. Exported Events
 
@@ -756,7 +760,7 @@ opensips-cli -x mi pres_expose presence ^sip:10\.0\.5\.[0-9]*
 1.7.2.  E_PRESENCE_EXPOSED
 
    This event is raised for each presentity exposeed by the
-   pres_expose.
+   presence:expose.
 
    Parameters:
 
@@ -1069,15 +1073,15 @@ Chapter 3. Contributors
    Table 3.1. Top contributors by DevScore^(1), authored
    commits^(2) and lines added/removed^(3)
      Name DevScore Commits Lines ++ Lines --
-   1. Anca Vamanu 659 247 24146 12623
-   2. Bogdan-Andrei Iancu (@bogdan-iancu) 154 95 3228 1843
-   3. Razvan Crainea (@razvancrainea) 35 28 423 163
+   1. Anca Vamanu 660 247 24146 12623
+   2. Bogdan-Andrei Iancu (@bogdan-iancu) 161 97 3845 1846
+   3. Razvan Crainea (@razvancrainea) 47 38 489 236
    4. Liviu Chircu (@liviuchircu) 35 25 287 397
    5. Vlad Patrascu (@rvlad-patrascu) 33 19 631 481
    6. Ovidiu Sas (@ovidiusas) 29 20 618 170
    7. Daniel-Constantin Mierla (@miconda) 24 19 174 165
    8. Dan Pascu (@danpascu) 20 14 162 201
-   9. Henning Westerholt (@henningw) 14 6 340 302
+   9. Henning Westerholt (@henningw) 15 6 340 302
    10. Walter Doekes (@wdoekes) 11 7 150 105
 
    All remaining contributors: Saúl Ibarra Corretgé (@saghul),
@@ -1089,7 +1093,8 @@ Chapter 3. Contributors
    Darilion, Carlos Oliva, Sergio Gutierrez, Kennard White,
    Elena-Ramona Modroiu, Jasper Hafkenscheid, Vasil Kolev, Benny
    Prijono, James Criscuolo, Vallimamod Abdullah, UnixDev, Denis
-   Bilenko, Julián Moreno Patiño, John Riordan, Julien Blache.
+   Bilenko, Julián Moreno Patiño, John Riordan, Stefan Darius,
+   Julien Blache.
 
    (1) DevScore = author_commits + author_lines_added /
    (project_lines_added / project_commits) + author_lines_deleted
@@ -1099,7 +1104,7 @@ Chapter 3. Contributors
    merge commits. Regarding imported patches/code, we do our best
    to count the work on behalf of the proper owner, as per the
    "fix_authors" and "mod_renames" arrays in
-   opensips/doc/build-contrib.sh. If you identify any
+   opensips/docs/build-contrib.sh. If you identify any
    patches/commits which do not get properly attributed to you,
    please submit a pull request which extends "fix_authors" and/or
    "mod_renames".
@@ -1111,28 +1116,28 @@ Chapter 3. Contributors
 
    Table 3.2. Most recently active contributors^(1) to this module
                       Name                   Commit Activity
-   1.  Bogdan-Andrei Iancu (@bogdan-iancu) Oct 2006 - Sep 2025
-   2.  Peter Lemenkov (@lemenkov)          Jun 2018 - Jul 2025
-   3.  Norman Brandinger (@NormB)          May 2024 - Nov 2024
-   4.  Alexandra Titoc                     Sep 2024 - Sep 2024
-   5.  Carsten Bock                        Mar 2024 - Mar 2024
-   6.  Maksym Sobolyev (@sobomax)          Jan 2021 - Nov 2023
-   7.  Vlad Patrascu (@rvlad-patrascu)     May 2017 - Jul 2022
-   8.  Jasper Hafkenscheid                 Jul 2022 - Jul 2022
-   9.  Razvan Crainea (@razvancrainea)     Sep 2011 - Jun 2021
-   10. Walter Doekes (@wdoekes)            Apr 2010 - Apr 2021
+   1.  Bogdan-Andrei Iancu (@bogdan-iancu) Oct 2006 - Jul 2026
+   2.  Stefan Darius                       Jul 2026 - Jul 2026
+   3.  Razvan Crainea (@razvancrainea)     Sep 2011 - Jun 2026
+   4.  Peter Lemenkov (@lemenkov)          Jun 2018 - Jul 2025
+   5.  Norman Brandinger (@NormB)          May 2024 - Nov 2024
+   6.  Alexandra Titoc                     Sep 2024 - Sep 2024
+   7.  Carsten Bock                        Mar 2024 - Mar 2024
+   8.  Maksym Sobolyev (@sobomax)          Jan 2021 - Nov 2023
+   9.  Vlad Patrascu (@rvlad-patrascu)     May 2017 - Jul 2022
+   10. Jasper Hafkenscheid                 Jul 2022 - Jul 2022
 
-   All remaining contributors: Liviu Chircu (@liviuchircu), Ovidiu
-   Sas (@ovidiusas), Dan Pascu (@danpascu), James Criscuolo,
-   Julián Moreno Patiño, Dusan Klinec (@ph4r05), Carlos Oliva,
-   Damien Sandras (@dsandras), Vlad Paiu (@vladpaiu), Saúl Ibarra
-   Corretgé (@saghul), Anca Vamanu, Vallimamod Abdullah, Kennard
-   White, Stanislaw Pitucha, Angel Marin, John Riordan, Vasil
-   Kolev, UnixDev, Sergio Gutierrez, Kobi Eshun (@ekobi), Klaus
-   Darilion, Denis Bilenko, Henning Westerholt (@henningw), Juha
-   Heinanen (@juha-h), Daniel-Constantin Mierla (@miconda), Edson
-   Gellert Schubert, Julien Blache, Benny Prijono, Elena-Ramona
-   Modroiu.
+   All remaining contributors: Walter Doekes (@wdoekes), Liviu
+   Chircu (@liviuchircu), Ovidiu Sas (@ovidiusas), Dan Pascu
+   (@danpascu), James Criscuolo, Julián Moreno Patiño, Dusan
+   Klinec (@ph4r05), Carlos Oliva, Damien Sandras (@dsandras),
+   Vlad Paiu (@vladpaiu), Saúl Ibarra Corretgé (@saghul), Anca
+   Vamanu, Vallimamod Abdullah, Kennard White, Stanislaw Pitucha,
+   Angel Marin, John Riordan, Vasil Kolev, UnixDev, Sergio
+   Gutierrez, Kobi Eshun (@ekobi), Klaus Darilion, Denis Bilenko,
+   Henning Westerholt (@henningw), Juha Heinanen (@juha-h),
+   Daniel-Constantin Mierla (@miconda), Edson Gellert Schubert,
+   Julien Blache, Benny Prijono, Elena-Ramona Modroiu.
 
    (1) including any documentation-related commits, excluding
    merge commits
@@ -1141,15 +1146,15 @@ Chapter 4. Documentation
 
 4.1. Contributors
 
-   Last edited by: Liviu Chircu (@liviuchircu), Bogdan-Andrei
-   Iancu (@bogdan-iancu), Jasper Hafkenscheid, Ovidiu Sas
-   (@ovidiusas), Vlad Patrascu (@rvlad-patrascu), Walter Doekes
-   (@wdoekes), Dan Pascu (@danpascu), Razvan Crainea
-   (@razvancrainea), Peter Lemenkov (@lemenkov), Saúl Ibarra
-   Corretgé (@saghul), Anca Vamanu, Kennard White, Angel Marin,
-   Kobi Eshun (@ekobi), Klaus Darilion, Henning Westerholt
-   (@henningw), Daniel-Constantin Mierla (@miconda), Edson Gellert
-   Schubert, Juha Heinanen (@juha-h), Elena-Ramona Modroiu.
+   Last edited by: Razvan Crainea (@razvancrainea), Liviu Chircu
+   (@liviuchircu), Bogdan-Andrei Iancu (@bogdan-iancu), Jasper
+   Hafkenscheid, Ovidiu Sas (@ovidiusas), Vlad Patrascu
+   (@rvlad-patrascu), Walter Doekes (@wdoekes), Dan Pascu
+   (@danpascu), Peter Lemenkov (@lemenkov), Saúl Ibarra Corretgé
+   (@saghul), Anca Vamanu, Kennard White, Angel Marin, Kobi Eshun
+   (@ekobi), Klaus Darilion, Henning Westerholt (@henningw),
+   Daniel-Constantin Mierla (@miconda), Edson Gellert Schubert,
+   Juha Heinanen (@juha-h), Elena-Ramona Modroiu.
 
    Documentation Copyrights:
 

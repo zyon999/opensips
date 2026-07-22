@@ -205,52 +205,6 @@ modparam("proto_bins", "bins_async_max_postponed_chunks", 16)
 </programlisting>
 		</example>
 	</section>
-	<section id="param_bins_async_local_connect_timeout" xreflabel="bins_async_local_connect_timeout">
-		<title><varname>bins_async_local_connect_timeout</varname> (integer)</title>
-		<para>
-			If bin_async is enabled, this specifies the number of
-			milliseconds that a connect will be tried in blocking mode
-			(optimization). If the connect operation lasts more than this,
-			the connect will go to async mode and will be passed to TCP
-			MAIN for polling.
-		</para>
-		<para>
-		<emphasis>
-			Default value is 100 ms.
-		</emphasis>
-		</para>
-		<example>
-		<title>Set <varname>bins_async_local_connect_timeout</varname> parameter</title>
-		<programlisting format="linespecific">
-...
-modparam("proto_bins", "bins_async_local_connect_timeout", 200)
-...
-</programlisting>
-		</example>
-	</section>
-		<section id="param_bins_async_handshake_timeout" xreflabel="bins_async_handshake_timeout">
-			<title><varname>bins_async_handshake_timeout</varname> (integer)</title>
-			<para>
-				If <emphasis>tls_async</emphasis> is enabled, this specifies the
-				number of milliseconds that a TLS handshake should be tried in blocking
-				mode (optimization). If the handshake operation lasts more than this,
-				the write will go to async mode and will be passed to tls MAIN for
-				polling.
-			</para>
-			<para>
-			<emphasis>
-				Default value is 10 ms.
-			</emphasis>
-			</para>
-			<example>
-			<title>Set <varname>bins_async_handshake_timeout</varname> parameter</title>
-			<programlisting format="linespecific">
-	...
-	modparam("proto_tls", "bins_async_handshake_timeout", 100)
-	...
-	</programlisting>
-			</example>
-		</section>
 	<section id="param_trace_destination" xreflabel="trace_destination">
 		<title><varname>trace_destination</varname> (string)</title>
 		<para>
@@ -289,7 +243,7 @@ modparam("proto_bins", "trace_destination", "hep_dest")
 		<para>
 			This controls whether tracing for tls is on or not. You still need to define
 			<xref linkend="param_trace_destination"/>in order to work, but this value will be
-			controlled using mi function <xref linkend="mi_bins_trace"/>.
+			controlled using mi function <xref linkend="mi_trace"/>.
 		</para>
 		<emphasis>
 			Default value is 0(tracing inactive).
@@ -307,16 +261,20 @@ modparam("proto_bins", "trace_on", 1)
 	<section id="exported_mi_functions" xreflabel="Exported MI Functions">
 	<title>Exported MI Functions</title>
 
-		<section id="mi_bins_trace" xreflabel="bins_trace">
+		<section id="mi_trace" xreflabel="bins:trace">
 			<title>
-			<function moreinfo="none">bins_trace</function>
+			<function moreinfo="none">bins:trace</function>
 			</title>
+		<para>
+		Replaces obsolete MI command: <emphasis>tls_trace</emphasis>.
+		</para>
+
 
 			<para>
 			</para>
 
 			<para>
-			Name: <emphasis>bins_trace</emphasis>
+			Name: <emphasis>bins:trace</emphasis>
 			</para>
 
 			<para>Parameters: </para>
@@ -338,7 +296,7 @@ modparam("proto_bins", "trace_on", 1)
 			MI FIFO Command Format:
 			</para>
 			<programlisting  format="linespecific">
-			opensips-cli -x mi bins_trace on
+			opensips-cli -x mi bins:trace on
 			</programlisting>
 		</section>
 	</section>
