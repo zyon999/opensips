@@ -117,6 +117,8 @@ typedef struct b2b_rpl_data
 	str* contact;
 	b2b_dlginfo_t* dlginfo;
 	int leg_idx;
+	unsigned int cseq;
+	int cseq_set;
 }b2b_rpl_data_t;
 
 
