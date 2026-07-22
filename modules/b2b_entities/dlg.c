@@ -53,6 +53,7 @@
 #define BUF_LEN              65535
 #define RACK_HDR_PREFIX      "RAck: "
 #define RACK_HDR_PREFIX_LEN  (sizeof(RACK_HDR_PREFIX) - 1)
+#define B2B_MAX_PENDING_UAS_TRANSACTIONS 16
 
 str ack = str_init(ACK);
 str bye = str_init(BYE);
@@ -65,6 +66,80 @@ struct b2b_callback *b2b_trig_cbs, *b2b_recv_cbs;
 static str storage_cap = str_init("b2b-storage-bin");
 
 static void b2b_free_record(b2b_dlg_t *dlg, b2b_table htable);
+
+static int b2b_uas_tran_identity(struct cell *tran, unsigned int *method,
+	unsigned int *cseq)
+{
+	struct sip_msg *msg;
+
+	if (!tran || tran == T_UNDEFINED)
+		return -1;
+
+	if (parse_method(tran->method.s, tran->method.s + tran->method.len,
+		method) == 0)
+		return -1;
+
+	msg = tran->uas.request;
+	if (!msg || parse_headers(msg, HDR_CSEQ_F, 0) < 0 || !msg->cseq ||
+		str2int(&get_cseq(msg)->number, cseq) != 0)
+		return -1;
+
+	return 0;
+}
+
+/* Called with the entity hash lock held. */
+static int b2b_queue_uas_tran(b2b_dlg_t *dlg, struct cell *tran,
+	unsigned int method)
+{
+	b2b_uas_tran_t *item, **tail;
+	unsigned int parsed_method, cseq;
+
+	if (dlg->pending_uas_count >= B2B_MAX_PENDING_UAS_TRANSACTIONS) {
+		LM_WARN("Too many pending UAS transactions for dialog [%p]\n", dlg);
+		return -1;
+	}
+
+	if (b2b_uas_tran_identity(tran, &parsed_method, &cseq) < 0 ||
+		parsed_method != method) {
+		LM_ERR("Failed to identify pending UAS transaction [%p]\n", tran);
+		return -1;
+	}
+
+	item = shm_malloc(sizeof(*item));
+	if (!item) {
+		LM_ERR("No more shared memory for pending UAS transaction\n");
+		return -1;
+	}
+
+	item->tran = tran;
+	item->method = method;
+	item->cseq = cseq;
+	item->next = NULL;
+	for (tail = &dlg->pending_uas_tran; *tail; tail = &(*tail)->next)
+		;
+	*tail = item;
+	dlg->pending_uas_count++;
+
+	LM_DBG("Queued UAS transaction [%p], method=%u, cseq=%u for dialog [%p]\n",
+		tran, method, cseq, dlg);
+	return 0;
+}
+
+/* Called with the entity hash lock held. */
+static void b2b_promote_pending_uas_tran(b2b_dlg_t *dlg)
+{
+	b2b_uas_tran_t *item = dlg->pending_uas_tran;
+
+	if (!item) {
+		dlg->uas_tran = NULL;
+		return;
+	}
+
+	dlg->pending_uas_tran = item->next;
+	dlg->pending_uas_count--;
+	dlg->uas_tran = item->tran;
+	shm_free(item);
+}
 
 /* called with the entity hash lock held */
 static void b2b_dlg_unref(b2b_dlg_t *dlg, b2b_table htable,
@@ -867,7 +942,10 @@ int b2b_prescript_f(struct sip_msg *msg, void *uparam)
 	b2b_table table = NULL;
 	int method_value;
 	unsigned int uac_method_value = 0;
+	unsigned int uas_method_value = 0;
+	unsigned int uas_cseq = 0;
 	int allow_early_refer_notify = 0;
+	int queued_uas_tran = 0;
 	str from_tag;
 	str to_tag;
 	str callid;
@@ -1384,10 +1462,19 @@ logic_notify:
 					tmb.unref_cell(tm_tran); /* for t_newtran() */
 					B2BE_LOCK_RELEASE(table, hash_index);
 					goto scb_drop_msg;
-				} else
-				if(dlg->uas_tran && dlg->uas_tran!=T_UNDEFINED)
+				} else if(dlg->uas_tran && dlg->uas_tran!=T_UNDEFINED)
 				{
-					if (method_value != METHOD_BYE) {
+					/* REFER agents commonly send the initial and final NOTIFY
+					 * back-to-back.  Keep each transaction until the UA session
+					 * application replies to its exact CSeq. */
+					if (method_value == METHOD_NOTIFY &&
+						(dlg->ua_flags & UA_FL_IS_UA_ENTITY) &&
+						b2b_uas_tran_identity(dlg->uas_tran,
+							&uas_method_value, &uas_cseq) == 0 &&
+						uas_method_value == METHOD_NOTIFY &&
+						b2b_queue_uas_tran(dlg, tm_tran, method_value) == 0) {
+						queued_uas_tran = 1;
+					} else if (method_value != METHOD_BYE) {
 						/* We have another UAS ongoing transaction on the dialog
 						 * -> reject with 500, "Overlapping Requests" */
 						#define RETRY_AFTER_HDR "Retry-After: "
@@ -1452,8 +1539,10 @@ logic_notify:
 				}
 
 				/* the new request is accepted for handling */
-				dlg->uas_tran = tm_tran;
-				LM_DBG("Saved uas_tran=[%p] for dlg[%p]\n", tm_tran, dlg);
+				if (!queued_uas_tran) {
+					dlg->uas_tran = tm_tran;
+					LM_DBG("Saved uas_tran=[%p] for dlg[%p]\n", tm_tran, dlg);
+				}
 			}
 		}
 		else
@@ -1652,7 +1741,7 @@ run_cb:
 
 	if ((ua_flags&UA_FL_IS_UA_ENTITY) && dlg_state == B2B_TERMINATED) {
 		if (ua_send_reply(etype, &b2b_key, METHOD_BYE, 200, &str_init("OK"),
-			NULL, NULL, NULL) < 0) {
+			NULL, NULL, NULL, NULL) < 0) {
 			LM_ERR("Failed to send 200 OK reply\n");
 			goto end;
 		}
@@ -1946,6 +2035,8 @@ int _b2b_send_reply(b2b_dlg_t* dlg, b2b_rpl_data_t* rpl_data)
 	int b2b_ev = -1;
 	char indexed_to_tag_buf[B2B_MAX_KEY_SIZE + 1 + INT2STR_MAX_LEN];
 	dlg_leg_t *leg = NULL;
+	b2b_uas_tran_t *pending_uas = NULL, *pending_prev = NULL, *item;
+	unsigned int tm_cseq = 0;
 
 	if(et == B2B_SERVER)
 	{
@@ -2022,23 +2113,34 @@ int _b2b_send_reply(b2b_dlg_t* dlg, b2b_rpl_data_t* rpl_data)
 	else
 	{
 		tm_tran = dlg->uas_tran;
-		if(tm_tran)
-		{
-			if(parse_method(tm_tran->method.s,
-					tm_tran->method.s + tm_tran->method.len, &method_value) == 0)
-			{
-				LM_ERR("Wrong method stored in tm transaction [%.*s]\n",
-					tm_tran->method.len, tm_tran->method.s);
-				B2BE_LOCK_RELEASE(table, hash_index);
-				return -1;
+		if (tm_tran && b2b_uas_tran_identity(tm_tran, &method_value,
+			&tm_cseq) < 0) {
+			LM_ERR("Failed to identify stored UAS transaction [%p]\n", tm_tran);
+			B2BE_LOCK_RELEASE(table, hash_index);
+			return -1;
+		}
+
+		if (rpl_data->cseq_set && (!tm_tran || sip_method != method_value ||
+			rpl_data->cseq != tm_cseq)) {
+			for (item = dlg->pending_uas_tran; item;
+				pending_prev = item, item = item->next) {
+				if (item->method == (unsigned int)sip_method &&
+					item->cseq == rpl_data->cseq) {
+					pending_uas = item;
+					tm_tran = item->tran;
+					method_value = item->method;
+					tm_cseq = item->cseq;
+					break;
+				}
 			}
-			if(sip_method != method_value)
-			{
-				LM_ERR("Mismatch between the method in tm[%d] and the method to send reply to[%d]\n",
-						sip_method, method_value);
-				B2BE_LOCK_RELEASE(table, hash_index);
-				return -1;
-			}
+		}
+
+		if (tm_tran && (sip_method != method_value ||
+			(rpl_data->cseq_set && rpl_data->cseq != tm_cseq))) {
+			LM_ERR("No UAS transaction for method=%d, cseq=%u\n",
+				sip_method, rpl_data->cseq);
+			B2BE_LOCK_RELEASE(table, hash_index);
+			return -1;
 		}
 	}
 	if(tm_tran == NULL)
@@ -2078,13 +2180,21 @@ int _b2b_send_reply(b2b_dlg_t* dlg, b2b_rpl_data_t* rpl_data)
 				dlg->state= B2B_TERMINATED;
 			UPDATE_DBFLAG(dlg);
 		} else {
-			LM_DBG("Reset transaction- send final reply [%p], uas_tran=0\n", dlg);
+			LM_DBG("Reset transaction after final reply [%p]\n", dlg);
 			if(sip_method == METHOD_UPDATE)
 				dlg->update_tran = NULL;
 			else if (sip_method == METHOD_PRACK)
 				leg->prack_tran = NULL;
-			else
-				dlg->uas_tran = NULL;
+			else if (pending_uas) {
+				if (pending_prev)
+					pending_prev->next = pending_uas->next;
+				else
+					dlg->pending_uas_tran = pending_uas->next;
+				dlg->pending_uas_count--;
+				shm_free(pending_uas);
+			} else {
+				b2b_promote_pending_uas_tran(dlg);
+			}
 		}
 	}
 
@@ -2277,6 +2387,7 @@ static void b2b_free_record(b2b_dlg_t *dlg, b2b_table htable)
 {
 	str reply_text = str_init("Request Timeout");
 	struct to_body *pto;
+	b2b_uas_tran_t *pending, *next;
 
 	if(htable == server_htable && dlg->tag[CALLEE_LEG].s)
 		shm_free(dlg->tag[CALLEE_LEG].s);
@@ -2308,6 +2419,21 @@ static void b2b_free_record(b2b_dlg_t *dlg, b2b_table htable)
 		}
 
 		tmb.unref_cell(dlg->uas_tran);
+	}
+
+	for (pending = dlg->pending_uas_tran; pending; pending = next) {
+		next = pending->next;
+		if (pending->tran->uas.status < 200) {
+			pto = get_to(pending->tran->uas.request);
+			if (pto == NULL || pto->error != PARSE_OK) {
+				LM_ERR("'To' header COULD NOT be parsed\n");
+			} else if (run_tm_api(&tmb, t_reply_with_body, pending->tran,
+				408, &reply_text, 0, 0, &pto->tag_value) < 0) {
+				LM_ERR("Failed to send 408 reply\n");
+			}
+		}
+		tmb.unref_cell(pending->tran);
+		shm_free(pending);
 	}
 
 	if (dlg->update_tran) {
@@ -3822,6 +3948,8 @@ dummy_reply:
 			new_dlg->free_param = dlg->free_param;
 			new_dlg->uac_tran = dlg->uac_tran;
 			new_dlg->uas_tran = dlg->uas_tran;
+			new_dlg->pending_uas_tran = dlg->pending_uas_tran;
+			new_dlg->pending_uas_count = dlg->pending_uas_count;
 			new_dlg->next = dlg->next;
 			new_dlg->prev = dlg->prev;
 			new_dlg->add_dlginfo = dlg->add_dlginfo;
