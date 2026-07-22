@@ -501,7 +501,7 @@ ua_session_update($var(b2b_key), "OPTIONS");
 
 	<section id="func_ua_session_reply" xreflabel="ua_session_reply()">
 		<title>
-		<function moreinfo="none">ua_session_reply(key, method, code, [reason], [body], [extra_headers], [content_type])</function>
+		<function moreinfo="none">ua_session_reply(key, method, code, [reason], [body], [extra_headers], [content_type], [cseq])</function>
 		</title>
 		<para>
 		Sends a reply for a UA session started with the 
@@ -535,6 +535,11 @@ ua_session_update($var(b2b_key), "OPTIONS");
 				<emphasis>content_type (string, optional)</emphasis> - Content-Type header.
 				If the parameter is missing and a body is provided,
 				"Content-Type: application/sdp" will be used.
+			</para></listitem>
+			<listitem><para>
+				<emphasis>cseq (int, optional)</emphasis> - CSeq of the request being
+				replied to. Use this when multiple requests with the same method,
+				such as REFER subscription NOTIFY requests, are awaiting replies.
 			</para></listitem>
 		</itemizedlist>
 		<para>
@@ -747,10 +752,15 @@ opensips-cli -x mi b2b_entities:ua_session_update key=B2B.436.1925389.1649338095
 				If the parameter is missing and a body is provided,
 				"Content-Type: application/sdp" will be used.
 			</para></listitem>
+			<listitem><para>
+				<emphasis>cseq (optional)</emphasis> - CSeq of the request being
+				replied to. This disambiguates overlapping requests which use the
+				same SIP method.
+			</para></listitem>
 		</itemizedlist>
 		<para>opensips-cli Command Format:</para>
 <programlisting  format="linespecific">
-opensips-cli -x mi b2b_entities:ua_session_reply key=B2B.436.1925389.1649338095 method=OPTIONS code=200 reason=OK
+opensips-cli -x mi b2b_entities:ua_session_reply key=B2B.436.1925389.1649338095 method=NOTIFY code=200 reason=OK cseq=5377
 </programlisting>
 	</section>
 
@@ -896,4 +906,3 @@ opensips-cli -x mi b2b_entities:ua_session_terminate key=B2B.436.1925389.1649338
 </section>
 
 </chapter>
-

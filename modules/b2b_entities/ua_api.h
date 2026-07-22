@@ -84,7 +84,7 @@ void remove_ua_sess_tl(struct ua_sess_t_list *tl);
 
 int ua_entity_delete(int et, str* b2b_key, int db_del, int remove_tl);
 int ua_send_reply(int et, str *b2b_key, int method, int code, str *reason,
-	str *body, str *content_type, str *extra_headers);
+	str *body, str *content_type, str *extra_headers, int *cseq);
 int ua_send_request(int et, str *b2b_key, str *method, str *body,
 	str *content_type, str *extra_headers, unsigned int no_cb);
 
@@ -96,7 +96,7 @@ int b2b_ua_server_init(struct sip_msg *msg, pv_spec_t *key_spec,
 int b2b_ua_update(struct sip_msg *msg, str *key, str *method, str *body,
 	str *extra_headers, str *content_type);
 int b2b_ua_reply(struct sip_msg *msg, str *key, str *method, int *code,
-	str *reason, str *body, str *extra_headers, str *content_type);
+	str *reason, str *body, str *extra_headers, str *content_type, int *cseq);
 int b2b_ua_terminate(struct sip_msg *msg, str *key, str *extra_headers);
 
 mi_response_t *b2b_ua_session_client_start(const mi_params_t *params,

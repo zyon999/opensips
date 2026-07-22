@@ -80,6 +80,14 @@ typedef struct b2b_dlg_leg {
 
 struct ua_sess_t_list;
 
+typedef struct b2b_uas_tran
+{
+	struct cell          *tran;
+	unsigned int          method;
+	unsigned int          cseq;
+	struct b2b_uas_tran  *next;
+} b2b_uas_tran_t;
+
 /** Definitions for structures used for storing dialogs */
 typedef struct b2b_dlg
 {
@@ -108,6 +116,8 @@ typedef struct b2b_dlg
 	str                  ack_sdp;
 	struct cell*         uac_tran;
 	struct cell*         uas_tran;
+	b2b_uas_tran_t*      pending_uas_tran;
+	unsigned int         pending_uas_count;
 	struct cell*         update_tran;
 	struct cell*         cancel_tm_tran;
 	dlg_leg_t*           legs;

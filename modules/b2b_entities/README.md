@@ -430,7 +430,7 @@ ua_session_update($var(b2b_key), "OPTIONS");
 ```
 
 
-#### ua_session_reply(key, method, code, [reason], [body], [extra_headers], [content_type])
+#### ua_session_reply(key, method, code, [reason], [body], [extra_headers], [content_type], [cseq])
 
 
 Sends a reply for a UA session started with the 
@@ -453,6 +453,9 @@ to include in the SIP message.
 - *content_type (string, optional)* - Content-Type header.
 If the parameter is missing and a body is provided,
 "Content-Type: application/sdp" will be used.
+- *cseq (int, optional)* - CSeq of the request being replied to. Use this
+when multiple requests with the same method, such as REFER subscription
+NOTIFY requests, are awaiting replies.
 
 
 This function can be used from REQUEST_ROUTE, EVENT_ROUTE.
@@ -623,13 +626,15 @@ to include in the SIP message
 - *content_type (optional)* - Content-Type header.
 If the parameter is missing and a body is provided,
 "Content-Type: application/sdp" will be used.
+- *cseq (optional)* - CSeq of the request being replied to. This disambiguates
+overlapping requests which use the same SIP method.
 
 
 opensips-cli Command Format:
 
 
 ```bash
-opensips-cli -x mi b2b_entities:ua_session_reply key=B2B.436.1925389.1649338095 method=OPTIONS code=200 reason=OK
+opensips-cli -x mi b2b_entities:ua_session_reply key=B2B.436.1925389.1649338095 method=NOTIFY code=200 reason=OK cseq=5377
 ```
 
 
