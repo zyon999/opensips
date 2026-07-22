@@ -512,33 +512,38 @@ static int ua_build_hdrs(str *hdrs, int body, str *content_type, str *extra_head
 {
 	static str ct_type_sdp_str = str_init("Content-Type: application/sdp\r\n");
 
-	hdrs->len = extra_headers ? extra_headers->len : 0;
-	if (body && !content_type)
-		hdrs->len += ct_type_sdp_str.len;
-	else if (body && content_type)
-		hdrs->len += content_type->len;
+        hdrs->len = extra_headers ? extra_headers->len : 0;
+        if (body && !content_type)
+                hdrs->len += ct_type_sdp_str.len;
+        else if (body && content_type)
+                hdrs->len += content_type->len;
 
-	if (hdrs->len) {
-		hdrs->s = pkg_malloc(hdrs->len);
-		if (!hdrs->s) {
-			LM_ERR("no more pkg memory\n");
-			return -1;
-		}
+        if (hdrs->len) {
+                char *p;
 
-		if (body && !content_type) {
-			memcpy(hdrs->s, ct_type_sdp_str.s, ct_type_sdp_str.len);
-			if (extra_headers)
-				memcpy(hdrs->s + ct_type_sdp_str.len,
-					extra_headers->s, extra_headers->len);
-		} else if (body && content_type) {
-			memcpy(hdrs->s, content_type->s, content_type->len);
-			if (extra_headers)
-				memcpy(hdrs->s + content_type->len,
-					extra_headers->s, extra_headers->len);
-		}
-	}
+                hdrs->s = pkg_malloc(hdrs->len);
+                if (!hdrs->s) {
+                        LM_ERR("no more pkg memory\n");
+                        return -1;
+                }
 
-	return 0;
+                p = hdrs->s;
+
+                if (body && !content_type) {
+                        memcpy(p, ct_type_sdp_str.s, ct_type_sdp_str.len);
+                        p += ct_type_sdp_str.len;
+                } else if (body && content_type) {
+                        memcpy(p, content_type->s, content_type->len);
+                        p += content_type->len;
+                }
+
+                if (extra_headers) {
+                        memcpy(p, extra_headers->s, extra_headers->len);
+                        p += extra_headers->len;
+                }
+        }
+
+        return 0;
 }
 
 static b2b_dlg_t *ua_get_dlg_by_key(unsigned int hash_index,
