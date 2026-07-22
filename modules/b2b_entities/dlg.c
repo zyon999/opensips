@@ -724,6 +724,8 @@ int b2b_prescript_f(struct sip_msg *msg, void *uparam)
 	str logic_key= {NULL,0};
 	b2b_table table = NULL;
 	int method_value;
+	int uac_method_value = 0;
+	int allow_early_refer_notify = 0;
 	str from_tag;
 	str to_tag;
 	str callid;
@@ -1156,15 +1158,7 @@ logic_notify:
 			if (tm_tran != T_UNDEFINED)
 				b2b_run_tracer(dlg, msg, tm_tran);
 
-
-                        if (method_value == METHOD_NOTIFY)
-                        {
-                                str ok = str_init("OK");
-                                tmb.t_reply_with_body(tm_tran, 200, &ok, 0, 0, &to_tag);
-                                tmb.unref_cell(tm_tran);
-                                goto run_cb;
-                        }
-			else if (method_value == METHOD_PRACK)
+			if (method_value == METHOD_PRACK)
 			{
 				/* Because PRACK transactions are separate from whatever UAS is dealing with now (PRACKs can come before
 				   INVITE is answered and will have new CSeq), we need to make sure we store it for when we get response for it. */
@@ -1182,7 +1176,23 @@ logic_notify:
 					tmb.t_setkr(REQ_FWDED);
 				}
 
-				if(dlg->uac_tran && dlg->uac_tran!=T_UNDEFINED)
+				/*
+				 * A REFER creates an implicit subscription, and its initial
+				 * NOTIFY may arrive before the REFER transaction completes.
+				 * Preserve that independent UAS transaction for UA-session
+				 * applications, which answer it through ua_session_reply().
+				 */
+				if (method_value == METHOD_NOTIFY &&
+					(dlg->ua_flags & UA_FL_IS_UA_ENTITY) &&
+					dlg->uac_tran && dlg->uac_tran != T_UNDEFINED &&
+					parse_method(dlg->uac_tran->method.s,
+						dlg->uac_tran->method.s + dlg->uac_tran->method.len,
+						&uac_method_value) != 0 &&
+					uac_method_value == METHOD_REFER)
+					allow_early_refer_notify = 1;
+
+				if(dlg->uac_tran && dlg->uac_tran!=T_UNDEFINED &&
+						!allow_early_refer_notify)
 				{
 					/* We have an UAC ongoing transaction in the dialog
 					 * -> reject with 491 Request Pending */
